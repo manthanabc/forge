@@ -1,9 +1,11 @@
 use edtui::{EditorTheme, EditorView};
 use ratatui::layout::{Constraint, Direction, Layout};
 use ratatui::style::{Color, Style, Stylize};
-use ratatui::widgets::{Block, Padding, StatefulWidget, Widget};
+use ratatui::symbols::{border, line};
+use ratatui::widgets::{Block, Borders, Padding, StatefulWidget, Widget};
 
-use crate::domain::State;
+use crate::domain::{MenuItem, State};
+use crate::widgets::menu::MenuWidget;
 use crate::widgets::message_list::MessageList;
 use crate::widgets::spotlight::SpotlightWidget;
 use crate::widgets::status_bar::StatusBar;
@@ -41,13 +43,44 @@ impl StatefulWidget for ChatWidget {
         }
 
         if state.spotlight.is_visible {
-            SpotlightWidget.render(messages_area, buf, state)
+            // SpotlightWidget.render(messages_area, buf, state)
+
+            MenuWidget::new(vec![
+                MenuItem::new("Agent", "Switch between different agents", 'a'),
+                MenuItem::new(
+                    "Compact",
+                    "Start new conversation with summarized context",
+                    'c',
+                ),
+                MenuItem::new("Dump", "Export conversation as JSON or HTML", 'd'),
+                MenuItem::new("Quit", "Close the application", 'q'),
+                MenuItem::new("Forge", "Switch to agent Forge", 'f'),
+                MenuItem::new("Help", "Access help documentation and instructions", 'h'),
+                MenuItem::new("Info", "Display system and environment information", 'i'),
+                MenuItem::new("Login", "Authenticate with Forge account", 'l'),
+                MenuItem::new("Logout", "Sign out from current session", 'o'),
+                MenuItem::new("Model", "Switch to different AI model", 'm'),
+                MenuItem::new("Muse", "Switch to agent Muse", 'u'),
+                MenuItem::new("New", "Start new conversation", 'n'),
+                MenuItem::new("Tools", "View available tools", 't'),
+                MenuItem::new("Update", "Upgrade to latest Forge version", 'p'),
+            ])
+            .render(messages_area, buf, state);
         }
 
         // User input area block with status bar (now at bottom)
         let user_block = Block::bordered()
             .padding(Padding::new(0, 0, 0, 1))
             .border_style(Style::default().dark_gray())
+            .border_set(if state.spotlight.is_visible {
+                border::Set {
+                    top_left: line::VERTICAL_RIGHT,
+                    top_right: line::VERTICAL_LEFT,
+                    ..border::PLAIN
+                }
+            } else {
+                border::PLAIN
+            })
             .title_bottom(StatusBar::new(
                 "FORGE",
                 state.editor.mode.name(),

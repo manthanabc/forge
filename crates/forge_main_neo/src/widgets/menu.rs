@@ -6,24 +6,26 @@ use ratatui::widgets::*;
 
 use crate::domain::{MenuItem, State};
 
-pub struct Menu<T> {
+pub struct MenuWidget<T> {
     items: Vec<T>,
 }
 
-impl<T: Into<MenuItem>> Menu<T> {
+impl<T: Into<MenuItem>> MenuWidget<T> {
     pub fn new(items: Vec<T>) -> Self {
         Self { items }
     }
 
     pub fn menu_block() -> Block<'static> {
         Block::bordered()
+            .borders(Borders::TOP | Borders::LEFT | Borders::RIGHT)
             .padding(Padding::symmetric(1, 1))
             .border_set(border::Set {
-                bottom_right: line::VERTICAL_LEFT,
-                bottom_left: line::VERTICAL_RIGHT,
+                top_right: line::VERTICAL_LEFT,
+                top_left: line::VERTICAL_RIGHT,
                 ..border::PLAIN
             })
-            .title(" ↑/↓ Move • ⏎ Run • [ESC] Cancel ")
+            .title_bottom(" ↑/↓ Move • ⏎ Run • [ESC] Cancel ")
+            .title_style(Style::default().fg(Color::DarkGray))
             .border_style(Style::default().fg(Color::DarkGray))
     }
 
@@ -89,15 +91,7 @@ impl<T: Into<MenuItem>> Menu<T> {
 
     fn init_area(&self, area: Rect, buf: &mut ratatui::prelude::Buffer) -> Rect {
         let [area] = Layout::vertical([Constraint::Max(15)])
-            .flex(Flex::Center)
-            .areas(area);
-
-        let [area] = Layout::horizontal([Constraint::Percentage(75)])
-            .flex(Flex::Center)
-            .areas(area);
-
-        let [area] = Layout::horizontal([Constraint::Max(80)])
-            .flex(Flex::Center)
+            .flex(Flex::End)
             .areas(area);
 
         Clear.render(area, buf);
@@ -105,7 +99,7 @@ impl<T: Into<MenuItem>> Menu<T> {
     }
 }
 
-impl<T> StatefulWidget for Menu<T>
+impl<T> StatefulWidget for MenuWidget<T>
 where
     T: Into<MenuItem> + Clone,
 {
@@ -148,10 +142,8 @@ where
             .collect::<Vec<_>>();
         let menu_list = List::new(list_items).block(menu_block);
 
-        let [menu_area, description_area] =
-            Layout::vertical([Constraint::Fill(1), Constraint::Max(4)])
-                .flex(Flex::SpaceAround)
-                .areas(area);
+        let [description_area, menu_area] =
+            Layout::vertical([Constraint::Fill(1), Constraint::Fill(4)]).areas(area);
 
         // Render the list with state for scrolling
         StatefulWidget::render(menu_list, menu_area, buf, &mut state.menu.list);
@@ -172,8 +164,13 @@ where
         if let Some(selected_item) = selected_menu_item {
             // Render the menu's description block
             let description_block = Block::new()
-                .borders(Borders::BOTTOM | Borders::LEFT | Borders::RIGHT)
-                .padding(Padding { left: 1, right: 1, top: 0, bottom: 0 })
+                .borders(Borders::LEFT | Borders::RIGHT | Borders::TOP)
+                .border_set(border::Set {
+                    bottom_right: line::VERTICAL_LEFT,
+                    bottom_left: line::VERTICAL_RIGHT,
+                    ..border::PLAIN
+                })
+                .padding(Padding::symmetric(1, 0))
                 .border_style(Style::default().fg(Color::DarkGray));
 
             // TODO: use description of the selected item
@@ -205,8 +202,8 @@ mod tests {
             MenuItem::new("Another Item", "Another Description", 'a'),
         ];
 
-        let actual = Menu::new(fixture.clone());
-        let expected = Menu { items: fixture };
+        let actual = MenuWidget::new(fixture.clone());
+        let expected = MenuWidget { items: fixture };
 
         assert_eq!(actual.items.len(), expected.items.len());
         assert_eq!(actual.items[0].title, expected.items[0].title);
