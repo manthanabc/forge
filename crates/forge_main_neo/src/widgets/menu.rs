@@ -17,13 +17,13 @@ impl Menu {
 
     pub fn menu_block() -> Block<'static> {
         Block::bordered()
-            .padding(Padding::right(1))
+            .padding(Padding { left: 1, right: 1, top: 0, bottom: 0 })
             .border_set(border::Set {
                 bottom_right: line::VERTICAL_LEFT,
                 bottom_left: line::VERTICAL_RIGHT,
                 ..border::PLAIN
             })
-            .title(" ↑/↓ Move • [Key] Jump • [ESC] Cancel • ⏎ Run")
+            .title(" ↑/↓ Move • ⏎ Run • [ESC] Cancel")
             .border_style(Style::default().fg(Color::DarkGray))
     }
 
@@ -161,7 +161,7 @@ impl StatefulWidget for Menu {
         }
 
         // Render the menu's description block
-        let description_block = Block::bordered()
+        let description_block = Block::new()
             .borders(Borders::BOTTOM | Borders::LEFT | Borders::RIGHT)
             .border_style(Style::default().fg(Color::DarkGray));
 
@@ -169,7 +169,7 @@ impl StatefulWidget for Menu {
         Paragraph::new(vec![
             Line::from(selected_item.description.to_owned()).style(Style::new().dim()),
             Line::from(format!(
-                "Shortcut: [{}] = {}",
+                "Shortcut: [⇧ + {}] = {}",
                 selected_item.shortcut.to_ascii_uppercase(),
                 selected_item.title
             ))
