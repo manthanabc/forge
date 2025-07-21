@@ -17,14 +17,14 @@ impl Menu {
 
     pub fn menu_block() -> Block<'static> {
         Block::bordered()
+            .padding(Padding::right(1))
             .border_set(border::Set {
                 bottom_right: line::VERTICAL_LEFT,
                 bottom_left: line::VERTICAL_RIGHT,
                 ..border::PLAIN
             })
-            .title(" » Use ↑ ↓ or [key] to select")
-            .title_style(Style::default().bold())
-            .border_style(Style::default().fg(Color::Blue))
+            .title(" ↑/↓ Move • [Key] Jump • ⏎ Run ")
+            .border_style(Style::default().fg(Color::DarkGray))
     }
 
     fn render_menu_item(
@@ -41,10 +41,10 @@ impl Menu {
         let mut spans: Vec<Span<'static>> = Vec::new();
         spans.push(Span::styled(
             format!("[{}] ", char.to_ascii_uppercase()),
-            Style::new().dim(),
+            Style::new().bold().yellow(),
         ));
 
-        let mut style = Style::default().cyan().bold();
+        let mut style = Style::default().bold();
 
         if is_selected {
             style = style.fg(Color::White)
@@ -78,7 +78,7 @@ impl Menu {
         }
 
         // Add description with calculated padding
-        spans.push(Span::styled(description.to_string(), style.green()));
+        spans.push(Span::styled(description.to_string(), style));
 
         let mut style = Style::new();
         if is_selected {
@@ -110,7 +110,7 @@ impl StatefulWidget for Menu {
         buf: &mut ratatui::prelude::Buffer,
         state: &mut Self::State,
     ) {
-        let selected_index = state.menu.list.selected().unwrap_or(0);
+        let selected_index = state.menu.list.selected().unwrap_or(2);
         let selected_item = self.items.get(selected_index).unwrap();
         let area = self.init_area(area, buf);
         let menu_block = Self::menu_block();
@@ -151,27 +151,25 @@ impl StatefulWidget for Menu {
 
             Scrollbar::new(ScrollbarOrientation::VerticalRight)
                 .symbols(scrollbar::Set { ..scrollbar::VERTICAL })
-                .style(Style::default().fg(Color::Blue))
-                .thumb_style(Style::default().cyan())
+                .style(Style::default().fg(Color::DarkGray))
+                .thumb_style(Style::default().dark_gray())
                 .render(scrollbar_area, buf, &mut scrollbar_state);
         }
 
         // Render the menu's description block
         let description_block = Block::bordered()
             .borders(Borders::BOTTOM | Borders::LEFT | Borders::RIGHT)
-            .border_style(Style::default().fg(Color::Blue));
+            .border_style(Style::default().fg(Color::DarkGray));
 
         // TODO: use description of the selected item
         Paragraph::new(vec![
             Line::from(selected_item.description.to_owned()).style(Style::new().dim()),
             Line::from(format!(
-                "Shortcut: [{}] = {}",
+                "Shortcut: [{}] = {} · [/] = Search · [ESC] = Cancel",
                 selected_item.shortcut.to_ascii_uppercase(),
                 selected_item.title
             ))
             .style(Style::new().dim()),
-            Line::from("TIP:      [/] = Search · [ESC] = Cancel".to_string())
-                .style(Style::new().dim()),
         ])
         .block(description_block)
         .render(description_area, buf);
