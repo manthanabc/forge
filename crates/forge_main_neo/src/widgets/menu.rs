@@ -92,7 +92,11 @@ impl Menu {
             .flex(Flex::Center)
             .areas(area);
 
-        let [area] = Layout::horizontal([Constraint::Percentage(50)])
+        let [area] = Layout::horizontal([Constraint::Percentage(75)])
+            .flex(Flex::Center)
+            .areas(area);
+
+        let [area] = Layout::horizontal([Constraint::Max(80)])
             .flex(Flex::Center)
             .areas(area);
 
