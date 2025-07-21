@@ -7,7 +7,7 @@ use edtui::{EditorEventHandler, EditorMode};
 use ratatui::crossterm::event::{KeyCode, KeyModifiers};
 
 use crate::domain::spotlight::SpotlightState;
-use crate::domain::{Command, EditorStateExt, State};
+use crate::domain::{Command, EditorStateExt, MenuItems, State};
 
 fn handle_spotlight_input_change(state: &mut State) {
     // Reset selection index when input changes to ensure it's within bounds
@@ -205,8 +205,8 @@ fn handle_menu_navigation(
         return false;
     }
 
-    // Menu items count - this should match the menu items defined in chat.rs
-    const MENU_ITEMS_COUNT: usize = 14;
+    // Get menu items count dynamically to ensure consistency
+    let menu_items_count = MenuItems::new().count();
 
     match key_event.code {
         KeyCode::Up => {
@@ -215,13 +215,13 @@ fn handle_menu_navigation(
                 state.menu.list.select(Some(current_selected - 1));
             } else {
                 // Wrap to bottom when at top
-                state.menu.list.select(Some(MENU_ITEMS_COUNT - 1));
+                state.menu.list.select(Some(menu_items_count - 1));
             }
             true
         }
         KeyCode::Down => {
             let current_selected = state.menu.list.selected().unwrap_or(0);
-            if current_selected < MENU_ITEMS_COUNT - 1 {
+            if current_selected < menu_items_count - 1 {
                 state.menu.list.select(Some(current_selected + 1));
             } else {
                 // Wrap to top when at bottom
@@ -241,6 +241,12 @@ fn handle_message_scroll(
 
     // Only handle message scroll when menu navigation doesn't handle it first
     if state.spotlight.is_visible || state.editor.mode != EditorMode::Normal {
+        return false;
+    }
+
+    // Check if there are no messages to scroll (menu should be visible and take
+    // precedence)
+    if state.messages.is_empty() {
         return false;
     }
 
@@ -741,141 +747,68 @@ mod tests {
     }
 
     #[test]
-    fn test_menu_navigation_up_down() {
+    fn test_menu_navigation_comprehensive() {
         let mut state = State::default();
         state.editor.mode = EditorMode::Normal;
         state.spotlight.is_visible = false;
 
-        // Test down navigation
+        // Test basic down navigation
         let key_event = KeyEvent::new(KeyCode::Down, KeyModifiers::NONE);
         let actual_command = handle_key_event(&mut state, key_event);
-        let expected_command = Command::Empty;
-
-        assert_eq!(actual_command, expected_command);
+        assert_eq!(actual_command, Command::Empty);
         assert_eq!(state.menu.list.selected(), Some(1));
 
-        // Test up navigation
+        // Test basic up navigation
         let key_event = KeyEvent::new(KeyCode::Up, KeyModifiers::NONE);
         let actual_command = handle_key_event(&mut state, key_event);
-        let expected_command = Command::Empty;
+        assert_eq!(actual_command, Command::Empty);
+        assert_eq!(state.menu.list.selected(), Some(0));
 
-        assert_eq!(actual_command, expected_command);
+        // Test wrapping from top to bottom (up from index 0)
+        let key_event = KeyEvent::new(KeyCode::Up, KeyModifiers::NONE);
+        let actual_command = handle_key_event(&mut state, key_event);
+        assert_eq!(actual_command, Command::Empty);
+        assert_eq!(state.menu.list.selected(), Some(13)); // Last item (14 total, 0-indexed)
+
+        // Test wrapping from bottom to top (down from last index)
+        let key_event = KeyEvent::new(KeyCode::Down, KeyModifiers::NONE);
+        let actual_command = handle_key_event(&mut state, key_event);
+        assert_eq!(actual_command, Command::Empty);
         assert_eq!(state.menu.list.selected(), Some(0));
     }
 
     #[test]
-    fn test_menu_navigation_wrapping() {
+    fn test_menu_navigation_disabled_states() {
         let mut state = State::default();
-        state.editor.mode = EditorMode::Normal;
-        state.spotlight.is_visible = false;
 
-        // Test up navigation at top boundary (should wrap to bottom)
-        let key_event = KeyEvent::new(KeyCode::Up, KeyModifiers::NONE);
-        let actual_command = handle_key_event(&mut state, key_event);
-        let expected_command = Command::Empty;
-
-        assert_eq!(actual_command, expected_command);
-        assert_eq!(state.menu.list.selected(), Some(13)); // 14 items, so last index is 13
-
-        // Test down navigation at bottom boundary (should wrap to top)
-        let key_event = KeyEvent::new(KeyCode::Down, KeyModifiers::NONE);
-        let actual_command = handle_key_event(&mut state, key_event);
-        let expected_command = Command::Empty;
-
-        assert_eq!(actual_command, expected_command);
-        assert_eq!(state.menu.list.selected(), Some(0));
-    }
-
-    #[test]
-    fn test_menu_navigation_always_available_in_normal_mode() {
-        let mut state = State::default();
-        state.editor.mode = EditorMode::Normal;
-        state.spotlight.is_visible = false;
-        state.add_user_message("Test message".to_string()); // Add a message
-
-        // Test that menu navigation works even when messages are present
-        let key_event = KeyEvent::new(KeyCode::Down, KeyModifiers::NONE);
-        let actual_command = handle_key_event(&mut state, key_event);
-        let expected_command = Command::Empty;
-
-        assert_eq!(actual_command, expected_command);
-        // Menu selection should change since navigation is enabled in normal mode
-        assert_eq!(state.menu.list.selected(), Some(1));
-    }
-
-    #[test]
-    fn test_menu_navigation_disabled_when_spotlight_visible() {
-        let mut state = State::default();
+        // Test navigation disabled when spotlight is visible
         state.editor.mode = EditorMode::Normal;
         state.spotlight.is_visible = true;
-
-        // Test that menu navigation is disabled when spotlight is visible
         let key_event = KeyEvent::new(KeyCode::Down, KeyModifiers::NONE);
         let actual_command = handle_key_event(&mut state, key_event);
-        let expected_command = Command::Empty;
+        assert_eq!(actual_command, Command::Empty);
+        assert_eq!(state.menu.list.selected(), Some(0)); // Should not change
 
-        assert_eq!(actual_command, expected_command);
-        // Menu selection should remain at initial value (0) since navigation is
-        // disabled
-        assert_eq!(state.menu.list.selected(), Some(0));
-    }
-
-    #[test]
-    fn test_menu_navigation_disabled_when_editor_in_insert_mode() {
-        let mut state = State::default();
+        // Test navigation disabled when editor is in insert mode
         state.editor.mode = EditorMode::Insert;
         state.spotlight.is_visible = false;
-
-        // Test that menu navigation is disabled when editor is in insert mode
-        let key_event = KeyEvent::new(KeyCode::Down, KeyModifiers::NONE);
-        let actual_command = handle_key_event(&mut state, key_event);
-        let expected_command = Command::Empty;
-
-        assert_eq!(actual_command, expected_command);
-        // Menu selection should remain at initial value (0) since navigation is
-        // disabled
-        assert_eq!(state.menu.list.selected(), Some(0));
-    }
-
-    #[test]
-    fn test_menu_navigation_full_cycle_down() {
-        let mut state = State::default();
-        state.editor.mode = EditorMode::Normal;
-        state.spotlight.is_visible = false;
-
-        // Start from index 0 and navigate down through all items
-        for expected_index in 1..14 {
-            let key_event = KeyEvent::new(KeyCode::Down, KeyModifiers::NONE);
-            let actual_command = handle_key_event(&mut state, key_event);
-            assert_eq!(actual_command, Command::Empty);
-            assert_eq!(state.menu.list.selected(), Some(expected_index));
-        }
-
-        // Now we're at index 13 (last item), pressing down should wrap to 0
         let key_event = KeyEvent::new(KeyCode::Down, KeyModifiers::NONE);
         let actual_command = handle_key_event(&mut state, key_event);
         assert_eq!(actual_command, Command::Empty);
-        assert_eq!(state.menu.list.selected(), Some(0));
+        assert_eq!(state.menu.list.selected(), Some(0)); // Should not change
     }
 
     #[test]
-    fn test_menu_navigation_full_cycle_up() {
+    fn test_menu_navigation_works_with_messages() {
         let mut state = State::default();
         state.editor.mode = EditorMode::Normal;
         state.spotlight.is_visible = false;
+        state.add_user_message("Test message".to_string()); // Add messages to state
 
-        // Start from index 0, pressing up should wrap to 13
-        let key_event = KeyEvent::new(KeyCode::Up, KeyModifiers::NONE);
+        // Test that menu navigation still works when messages are present
+        let key_event = KeyEvent::new(KeyCode::Down, KeyModifiers::NONE);
         let actual_command = handle_key_event(&mut state, key_event);
         assert_eq!(actual_command, Command::Empty);
-        assert_eq!(state.menu.list.selected(), Some(13));
-
-        // Navigate up through all items
-        for expected_index in (0..13).rev() {
-            let key_event = KeyEvent::new(KeyCode::Up, KeyModifiers::NONE);
-            let actual_command = handle_key_event(&mut state, key_event);
-            assert_eq!(actual_command, Command::Empty);
-            assert_eq!(state.menu.list.selected(), Some(expected_index));
-        }
+        assert_eq!(state.menu.list.selected(), Some(1));
     }
 }

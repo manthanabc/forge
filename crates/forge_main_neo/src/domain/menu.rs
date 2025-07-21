@@ -13,7 +13,7 @@ impl Default for MenuState {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct MenuItem {
     pub title: String,
     pub description: String,
