@@ -6,18 +6,18 @@ use ratatui::widgets::*;
 
 use crate::domain::{MenuItem, State};
 
-pub struct Menu {
-    items: Vec<MenuItem>,
+pub struct Menu<T> {
+    items: Vec<T>,
 }
 
-impl Menu {
-    pub fn new(items: Vec<MenuItem>) -> Self {
+impl<T: Into<MenuItem>> Menu<T> {
+    pub fn new(items: Vec<T>) -> Self {
         Self { items }
     }
 
     pub fn menu_block() -> Block<'static> {
         Block::bordered()
-            .padding(Padding { left: 1, right: 1, top: 0, bottom: 0 })
+            .padding(Padding::symmetric(1, 1))
             .border_set(border::Set {
                 bottom_right: line::VERTICAL_LEFT,
                 bottom_left: line::VERTICAL_RIGHT,
@@ -105,7 +105,10 @@ impl Menu {
     }
 }
 
-impl StatefulWidget for Menu {
+impl<T> StatefulWidget for Menu<T>
+where
+    T: Into<MenuItem> + Clone,
+{
     type State = State;
 
     fn render(
@@ -115,29 +118,35 @@ impl StatefulWidget for Menu {
         state: &mut Self::State,
     ) {
         let selected_index = state.menu.list.selected().unwrap_or(2);
-        let selected_item = self.items.get(selected_index).unwrap();
+        let selected_menu_item: Option<MenuItem> = self
+            .items
+            .get(selected_index)
+            .map(|item| item.clone().into());
         let area = self.init_area(area, buf);
         let menu_block = Self::menu_block();
+        let items_len = self.items.len();
 
         // Calculate the maximum title width for consistent description alignment
-        let max_title_width = self
+        let menu_items = self
             .items
+            .iter()
+            .map(|item| Into::<MenuItem>::into(item.to_owned()))
+            .collect::<Vec<_>>();
+        let max_title_width = menu_items
             .iter()
             .map(|item| item.title.len())
             .max()
             .unwrap_or(0);
 
-        let items_len = self.items.len();
-        let items = self
-            .items
-            .iter()
+        let list_items = menu_items
+            .into_iter()
             .enumerate()
             .map(|(i, item)| {
                 let is_selected = i == selected_index;
-                self.render_menu_item(item.clone(), max_title_width, is_selected)
+                self.render_menu_item(item, max_title_width, is_selected)
             })
             .collect::<Vec<_>>();
-        let menu_list = List::new(items).block(menu_block);
+        let menu_list = List::new(list_items).block(menu_block);
 
         let [menu_area, description_area] =
             Layout::vertical([Constraint::Fill(1), Constraint::Max(4)])
@@ -160,23 +169,26 @@ impl StatefulWidget for Menu {
                 .render(scrollbar_area, buf, &mut scrollbar_state);
         }
 
-        // Render the menu's description block
-        let description_block = Block::new()
-            .borders(Borders::BOTTOM | Borders::LEFT | Borders::RIGHT)
-            .border_style(Style::default().fg(Color::DarkGray));
+        if let Some(selected_item) = selected_menu_item {
+            // Render the menu's description block
+            let description_block = Block::new()
+                .borders(Borders::BOTTOM | Borders::LEFT | Borders::RIGHT)
+                .padding(Padding { left: 1, right: 1, top: 0, bottom: 0 })
+                .border_style(Style::default().fg(Color::DarkGray));
 
-        // TODO: use description of the selected item
-        Paragraph::new(vec![
-            Line::from(selected_item.description.to_owned()).style(Style::new().dim()),
-            Line::from(format!(
-                "Shortcut: [⇧ + {}] = {}",
-                selected_item.shortcut.to_ascii_uppercase(),
-                selected_item.title
-            ))
-            .style(Style::new().dim()),
-        ])
-        .block(description_block)
-        .render(description_area, buf);
+            // TODO: use description of the selected item
+            Paragraph::new(vec![
+                Line::from(selected_item.description.to_owned()).style(Style::new().dim()),
+                Line::from(format!(
+                    "Shortcut: [⇧ + {}] = {}",
+                    selected_item.shortcut.to_ascii_uppercase(),
+                    selected_item.title
+                ))
+                .style(Style::new().dim()),
+            ])
+            .block(description_block)
+            .render(description_area, buf);
+        }
     }
 }
 
@@ -185,17 +197,6 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     use super::*;
-
-    #[test]
-    fn test_menu_block_returns_block() {
-        let actual = Menu::menu_block();
-
-        // Simply verify that we get a Block back - the styling details are
-        // implementation details that are better tested through integration
-        // tests
-        let _block: ratatui::widgets::Block = actual;
-        // If we reach here, the method works correctly
-    }
 
     #[test]
     fn test_menu_new() {
