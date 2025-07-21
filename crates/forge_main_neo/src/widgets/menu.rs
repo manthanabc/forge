@@ -111,7 +111,7 @@ where
         buf: &mut ratatui::prelude::Buffer,
         state: &mut Self::State,
     ) {
-        let selected_index = state.menu.list.selected().unwrap_or(2);
+        let selected_index = state.menu.list.selected().unwrap_or(0);
         let selected_menu_item: Option<MenuItem> = self
             .items
             .get(selected_index)
