@@ -23,7 +23,7 @@ impl<T: Into<MenuItem>> Menu<T> {
                 bottom_left: line::VERTICAL_RIGHT,
                 ..border::PLAIN
             })
-            .title(" ↑/↓ Move • ⏎ Run • [ESC] Cancel")
+            .title(" ↑/↓ Move • ⏎ Run • [ESC] Cancel ")
             .border_style(Style::default().fg(Color::DarkGray))
     }
 
