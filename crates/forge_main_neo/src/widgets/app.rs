@@ -1,8 +1,7 @@
 use ratatui::widgets::StatefulWidget;
 
-use crate::domain::{MenuItem, State};
+use crate::domain::State;
 use crate::widgets::chat::ChatWidget;
-use crate::widgets::menu::MenuWidget;
 
 #[derive(Clone, Default)]
 pub struct App;

@@ -1,13 +1,12 @@
-use edtui::{EditorTheme, EditorView};
+use edtui::{EditorMode, EditorTheme, EditorView};
 use ratatui::layout::{Constraint, Direction, Layout};
 use ratatui::style::{Color, Style, Stylize};
 use ratatui::symbols::{border, line};
-use ratatui::widgets::{Block, Borders, Padding, StatefulWidget, Widget};
+use ratatui::widgets::{Block, Padding, StatefulWidget, Widget};
 
 use crate::domain::{MenuItem, State};
 use crate::widgets::menu::MenuWidget;
 use crate::widgets::message_list::MessageList;
-use crate::widgets::spotlight::SpotlightWidget;
 use crate::widgets::status_bar::StatusBar;
 use crate::widgets::welcome::WelcomeWidget;
 
@@ -25,6 +24,8 @@ impl StatefulWidget for ChatWidget {
     ) where
         Self: Sized,
     {
+        let is_normal_mode = state.editor.mode == EditorMode::Normal;
+
         // Create chat layout with messages area at top and user input area at bottom
         let chat_layout = Layout::new(
             Direction::Vertical,
@@ -42,7 +43,7 @@ impl StatefulWidget for ChatWidget {
             MessageList.render(message_block.inner(messages_area), buf, state);
         }
 
-        if state.spotlight.is_visible {
+        if is_normal_mode {
             // SpotlightWidget.render(messages_area, buf, state)
 
             MenuWidget::new(vec![
@@ -72,7 +73,7 @@ impl StatefulWidget for ChatWidget {
         let user_block = Block::bordered()
             .padding(Padding::new(0, 0, 0, 1))
             .border_style(Style::default().dark_gray())
-            .border_set(if state.spotlight.is_visible {
+            .border_set(if is_normal_mode {
                 border::Set {
                     top_left: line::VERTICAL_RIGHT,
                     top_right: line::VERTICAL_LEFT,
