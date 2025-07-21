@@ -22,19 +22,33 @@ impl Menu {
                 bottom_left: line::VERTICAL_RIGHT,
                 ..border::PLAIN
             })
-            .title(" » MENU ")
+            .title(" » Use ↑ ↓ or [key] to select")
             .title_style(Style::default().bold())
             .border_style(Style::default().fg(Color::Blue))
     }
 
-    fn render_menu_item(&self, item: MenuItem, max_title_width: usize) -> ListItem<'static> {
+    fn render_menu_item(
+        &self,
+        item: MenuItem,
+        max_title_width: usize,
+        is_selected: bool,
+    ) -> ListItem<'static> {
         let max_title_width = max_title_width + 1;
         let char = item.shortcut;
         let title = format!("{:<max_title_width$}", item.title);
         let description = item.description;
 
         let mut spans: Vec<Span<'static>> = Vec::new();
-        spans.push(Span::styled(format!("[{char}] "), Style::new().dim()));
+        spans.push(Span::styled(
+            format!("[{}] ", char.to_ascii_uppercase()),
+            Style::new().dim(),
+        ));
+
+        let mut style = Style::default().cyan().bold();
+
+        if is_selected {
+            style = style.fg(Color::White)
+        }
 
         // Find the first occurrence of the trigger letter in the title (case
         // insensitive)
@@ -45,34 +59,32 @@ impl Menu {
         {
             // Add text before the trigger letter
             if pos > 0 {
-                spans.push(Span::styled(
-                    title[..pos].to_owned(),
-                    Style::default().cyan().bold(),
-                ));
+                spans.push(Span::styled(title[..pos].to_owned(), style));
             }
 
             // Add the highlighted trigger letter
             spans.push(Span::styled(
                 title[pos..pos + 1].to_owned(),
-                Style::default().bold().cyan().underlined(),
+                style.underlined(),
             ));
 
             // Add text after the trigger letter
             if pos + 1 < title.len() {
-                spans.push(Span::styled(
-                    title[pos + 1..].to_owned(),
-                    Style::default().cyan().bold(),
-                ));
+                spans.push(Span::styled(title[pos + 1..].to_owned(), style));
             }
         } else {
             // Fallback if trigger letter not found in title
-            spans.push(Span::styled(title, Style::default().cyan().bold()))
+            spans.push(Span::styled(title, style))
         }
 
         // Add description with calculated padding
-        spans.push(Span::styled(description.to_string(), Style::new().green()));
+        spans.push(Span::styled(description.to_string(), style.green()));
 
-        ListItem::new(Line::from(spans))
+        let mut style = Style::new();
+        if is_selected {
+            style = style.bg(Color::Cyan);
+        }
+        ListItem::new(Line::from(spans).style(style))
     }
 
     fn init_area(&self, area: Rect, buf: &mut ratatui::prelude::Buffer) -> Rect {
@@ -115,7 +127,11 @@ impl StatefulWidget for Menu {
         let items = self
             .items
             .iter()
-            .map(|item| self.render_menu_item(item.clone(), max_title_width))
+            .enumerate()
+            .map(|(i, item)| {
+                let is_selected = i == selected_index;
+                self.render_menu_item(item.clone(), max_title_width, is_selected)
+            })
             .collect::<Vec<_>>();
         let menu_list = List::new(items).block(menu_block);
 
@@ -148,7 +164,14 @@ impl StatefulWidget for Menu {
         // TODO: use description of the selected item
         Paragraph::new(vec![
             Line::from(selected_item.description.to_owned()).style(Style::new().dim()),
-            Line::from(format!("Shortcut: [{}]", selected_item.shortcut)).style(Style::new().dim()),
+            Line::from(format!(
+                "Shortcut: [{}] = {}",
+                selected_item.shortcut.to_ascii_uppercase(),
+                selected_item.title
+            ))
+            .style(Style::new().dim()),
+            Line::from("TIP:      [/] = Search · [ESC] = Cancel".to_string())
+                .style(Style::new().dim()),
         ])
         .block(description_block)
         .render(description_area, buf);
@@ -157,15 +180,17 @@ impl StatefulWidget for Menu {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use pretty_assertions::assert_eq;
+
+    use super::*;
 
     #[test]
     fn test_menu_block_returns_block() {
         let actual = Menu::menu_block();
 
-        // Simply verify that we get a Block back - the styling details are implementation details
-        // that are better tested through integration tests
+        // Simply verify that we get a Block back - the styling details are
+        // implementation details that are better tested through integration
+        // tests
         let _block: ratatui::widgets::Block = actual;
         // If we reach here, the method works correctly
     }

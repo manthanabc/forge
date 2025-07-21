@@ -19,44 +19,24 @@ impl StatefulWidget for App {
     {
         ChatWidget.render(area, buf, state);
         Menu::new(vec![
-            MenuItem::new(
-                "Agent",
-                "Switch between different AI agents for your requests",
-                'a',
-            ),
+            MenuItem::new("Agent", "Switch between different agents", 'a'),
             MenuItem::new(
                 "Compact",
-                "Create a condensed version of the current conversation",
+                "Start new conversation with summarized context",
                 'c',
             ),
-            MenuItem::new("Dump", "Export conversation to JSON or HTML format", 'd'),
-            MenuItem::new("Quit", "Close the application and end the session", 'q'),
-            MenuItem::new(
-                "Forge",
-                "Enable implementation mode for making code changes",
-                'f',
-            ),
-            MenuItem::new(
-                "Help",
-                "Access help documentation and usage instructions",
-                'h',
-            ),
+            MenuItem::new("Dump", "Export conversation as JSON or HTML", 'd'),
+            MenuItem::new("Quit", "Close the application", 'q'),
+            MenuItem::new("Forge", "Switch to agent Forge", 'f'),
+            MenuItem::new("Help", "Access help documentation and instructions", 'h'),
             MenuItem::new("Info", "Display system and environment information", 'i'),
-            MenuItem::new(
-                "Login",
-                "Authenticate with your Forge provider account",
-                'l',
-            ),
-            MenuItem::new("Logout", "Sign out from your current session", 'o'),
-            MenuItem::new("Model", "Switch to a different AI model", 'm'),
-            MenuItem::new(
-                "Muse",
-                "Enable planning mode without executing code changes",
-                'u',
-            ),
-            MenuItem::new("New", "Start a fresh conversation session", 'n'),
-            MenuItem::new("Tools", "View all available tools with descriptions", 't'),
-            MenuItem::new("Update", "Upgrade to the latest version of Forge", 'p'),
+            MenuItem::new("Login", "Authenticate with Forge account", 'l'),
+            MenuItem::new("Logout", "Sign out from current session", 'o'),
+            MenuItem::new("Model", "Switch to different AI model", 'm'),
+            MenuItem::new("Muse", "Switch to agent Muse", 'u'),
+            MenuItem::new("New", "Start new conversation", 'n'),
+            MenuItem::new("Tools", "View available tools", 't'),
+            MenuItem::new("Update", "Upgrade to latest Forge version", 'p'),
         ])
         .render(area, buf, state);
     }
