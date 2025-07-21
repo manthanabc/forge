@@ -23,7 +23,7 @@ impl Menu {
                 bottom_left: line::VERTICAL_RIGHT,
                 ..border::PLAIN
             })
-            .title(" ↑/↓ Move • [Key] Jump • ⏎ Run ")
+            .title(" ↑/↓ Move • [Key] Jump • [ESC] Cancel • ⏎ Run")
             .border_style(Style::default().fg(Color::DarkGray))
     }
 
@@ -169,7 +169,7 @@ impl StatefulWidget for Menu {
         Paragraph::new(vec![
             Line::from(selected_item.description.to_owned()).style(Style::new().dim()),
             Line::from(format!(
-                "Shortcut: [{}] = {} · [/] = Search · [ESC] = Cancel",
+                "Shortcut: [{}] = {}",
                 selected_item.shortcut.to_ascii_uppercase(),
                 selected_item.title
             ))
