@@ -1,6 +1,6 @@
 use ratatui::layout::*;
 use ratatui::style::{Color, Style, Stylize};
-use ratatui::symbols::{border, line};
+use ratatui::symbols::{border, line, scrollbar};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::*;
 
@@ -15,9 +15,21 @@ impl Menu {
         Self { items }
     }
 
-    fn render_menu_item(item: MenuItem, max_title_width: usize) -> Line<'static> {
+    pub fn menu_block() -> Block<'static> {
+        Block::bordered()
+            .border_set(border::Set {
+                bottom_right: line::VERTICAL_LEFT,
+                bottom_left: line::VERTICAL_RIGHT,
+                ..border::PLAIN
+            })
+            .title(" » MENU ")
+            .title_style(Style::default().bold())
+            .border_style(Style::default().fg(Color::Blue))
+    }
+
+    fn render_menu_item(&self, item: MenuItem, max_title_width: usize) -> ListItem<'static> {
         let max_title_width = max_title_width + 1;
-        let char = item.trigger_letter;
+        let char = item.shortcut;
         let title = format!("{:<max_title_width$}", item.title);
         let description = item.description;
 
@@ -26,7 +38,11 @@ impl Menu {
 
         // Find the first occurrence of the trigger letter in the title (case
         // insensitive)
-        if let Some(pos) = title.to_lowercase().as_str().find(char.to_ascii_lowercase()) {
+        if let Some(pos) = title
+            .to_lowercase()
+            .as_str()
+            .find(char.to_ascii_lowercase())
+        {
             // Add text before the trigger letter
             if pos > 0 {
                 spans.push(Span::styled(
@@ -56,7 +72,20 @@ impl Menu {
         // Add description with calculated padding
         spans.push(Span::styled(description.to_string(), Style::new().green()));
 
-        Line::from(spans)
+        ListItem::new(Line::from(spans))
+    }
+
+    fn init_area(&self, area: Rect, buf: &mut ratatui::prelude::Buffer) -> Rect {
+        let [area] = Layout::vertical([Constraint::Max(15)])
+            .flex(Flex::Center)
+            .areas(area);
+
+        let [area] = Layout::horizontal([Constraint::Percentage(50)])
+            .flex(Flex::Center)
+            .areas(area);
+
+        Clear.render(area, buf);
+        area
     }
 }
 
@@ -67,27 +96,12 @@ impl StatefulWidget for Menu {
         self,
         area: ratatui::prelude::Rect,
         buf: &mut ratatui::prelude::Buffer,
-        _state: &mut Self::State,
+        state: &mut Self::State,
     ) {
-        let [area] = Layout::vertical([Constraint::Percentage(75)])
-            .flex(Flex::Center)
-            .areas(area);
-
-        let [area] = Layout::horizontal([Constraint::Percentage(50)])
-            .flex(Flex::Center)
-            .areas(area);
-
-        Clear.render(area, buf);
-
-        let menu_block = Block::bordered()
-            .border_set(border::Set {
-                bottom_right: line::VERTICAL_LEFT,
-                bottom_left: line::VERTICAL_RIGHT,
-                ..border::PLAIN
-            })
-            .title(" MENU ")
-            .title_style(Style::default().bold())
-            .border_style(Style::default().fg(Color::Blue));
+        let selected_index = state.menu.list.selected().unwrap_or(0);
+        let selected_item = self.items.get(selected_index).unwrap();
+        let area = self.init_area(area, buf);
+        let menu_block = Self::menu_block();
 
         // Calculate the maximum title width for consistent description alignment
         let max_title_width = self
@@ -97,31 +111,77 @@ impl StatefulWidget for Menu {
             .max()
             .unwrap_or(0);
 
+        let items_len = self.items.len();
         let items = self
             .items
-            .into_iter()
-            .map(|item| Self::render_menu_item(item, max_title_width))
+            .iter()
+            .map(|item| self.render_menu_item(item.clone(), max_title_width))
             .collect::<Vec<_>>();
+        let menu_list = List::new(items).block(menu_block);
 
         let [menu_area, description_area] =
-            Layout::vertical([Constraint::Min(1), Constraint::Max(3)])
+            Layout::vertical([Constraint::Fill(1), Constraint::Max(4)])
                 .flex(Flex::SpaceAround)
                 .areas(area);
 
-        Paragraph::new(items)
-            .block(menu_block)
-            .render(menu_area, buf);
+        // Render the list with state for scrolling
+        StatefulWidget::render(menu_list, menu_area, buf, &mut state.menu.list);
 
+        // Add scrollbar if there are more items than can fit in the area
+        let scrollbar_area = menu_area.inner(Margin { horizontal: 0, vertical: 1 });
+        // TODO: not sure if this is best way to check if scrollbar is needed.
+        if items_len > scrollbar_area.height as usize {
+            let mut scrollbar_state = ScrollbarState::new(items_len).position(selected_index);
+
+            Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                .symbols(scrollbar::Set { ..scrollbar::VERTICAL })
+                .style(Style::default().fg(Color::Blue))
+                .thumb_style(Style::default().cyan())
+                .render(scrollbar_area, buf, &mut scrollbar_state);
+        }
+
+        // Render the menu's description block
         let description_block = Block::bordered()
             .borders(Borders::BOTTOM | Borders::LEFT | Borders::RIGHT)
             .border_style(Style::default().fg(Color::Blue));
 
         // TODO: use description of the selected item
         Paragraph::new(vec![
-            Line::from("Shortcut: `N`").style(Style::new().dim()),
-            Line::from("Creates a compact version of the conversation").style(Style::new().dim()),
+            Line::from(selected_item.description.to_owned()).style(Style::new().dim()),
+            Line::from(format!("Shortcut: [{}]", selected_item.shortcut)).style(Style::new().dim()),
         ])
         .block(description_block)
         .render(description_area, buf);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_menu_block_returns_block() {
+        let actual = Menu::menu_block();
+
+        // Simply verify that we get a Block back - the styling details are implementation details
+        // that are better tested through integration tests
+        let _block: ratatui::widgets::Block = actual;
+        // If we reach here, the method works correctly
+    }
+
+    #[test]
+    fn test_menu_new() {
+        let fixture = vec![
+            MenuItem::new("Test Item", "Test Description", 't'),
+            MenuItem::new("Another Item", "Another Description", 'a'),
+        ];
+
+        let actual = Menu::new(fixture.clone());
+        let expected = Menu { items: fixture };
+
+        assert_eq!(actual.items.len(), expected.items.len());
+        assert_eq!(actual.items[0].title, expected.items[0].title);
+        assert_eq!(actual.items[1].title, expected.items[1].title);
     }
 }

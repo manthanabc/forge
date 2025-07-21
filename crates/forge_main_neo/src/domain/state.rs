@@ -7,7 +7,7 @@ use throbber_widgets_tui::ThrobberState;
 use tui_scrollview::ScrollViewState;
 
 use crate::domain::spotlight::SpotlightState;
-use crate::domain::{CancelId, EditorStateExt, Message, Workspace};
+use crate::domain::{CancelId, EditorStateExt, MenuState, Message, Workspace};
 
 #[derive(Clone)]
 pub struct State {
@@ -21,6 +21,7 @@ pub struct State {
     pub conversation: ConversationState,
     pub chat_stream: Option<CancelId>,
     pub message_scroll_state: ScrollViewState,
+    pub menu: MenuState,
 }
 
 impl Default for State {
@@ -38,6 +39,7 @@ impl Default for State {
             conversation: Default::default(),
             chat_stream: None,
             message_scroll_state: ScrollViewState::default(),
+            menu: MenuState::default(),
         }
     }
 }

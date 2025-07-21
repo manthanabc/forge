@@ -30,7 +30,7 @@ impl StatefulWidget for App {
                 'c',
             ),
             MenuItem::new("Dump", "Export conversation to JSON or HTML format", 'd'),
-            MenuItem::new("Exit", "Close the application and end the session", 'e'),
+            MenuItem::new("Quit", "Close the application and end the session", 'q'),
             MenuItem::new(
                 "Forge",
                 "Enable implementation mode for making code changes",

@@ -1,8 +1,15 @@
+use ratatui::widgets::ListState;
+
+#[derive(Default, Clone, Debug)]
+pub struct MenuState {
+    pub list: ListState,
+}
+
 #[derive(Clone, Debug)]
 pub struct MenuItem {
     pub title: String,
     pub description: String,
-    pub trigger_letter: char,
+    pub shortcut: char,
 }
 
 impl MenuItem {
@@ -14,7 +21,7 @@ impl MenuItem {
         Self {
             title: title.into(),
             description: description.into(),
-            trigger_letter,
+            shortcut: trigger_letter,
         }
     }
 }
