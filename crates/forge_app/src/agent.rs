@@ -1,5 +1,5 @@
 use std::sync::Arc;
-
+use std::time::Duration;
 use forge_domain::{
     Agent, ChatCompletionMessage, Context, Conversation, ModelId, ResultStream, ToolCallContext,
     ToolCallFull, ToolResult,
@@ -26,6 +26,7 @@ pub trait AgentService: Send + Sync + 'static {
     async fn call(
         &self,
         agent: &Agent,
+        tool_timeout: Duration,
         context: &mut ToolCallContext,
         call: ToolCallFull,
     ) -> ToolResult;
@@ -57,11 +58,12 @@ impl<T: Services> AgentService for T {
     async fn call(
         &self,
         agent: &Agent,
+        tool_timeout: Duration,
         context: &mut ToolCallContext,
         call: ToolCallFull,
     ) -> ToolResult {
         let registry = ToolRegistry::new(Arc::new(self.clone()));
-        registry.call(agent, context, call).await
+        registry.call(agent, tool_timeout, context, call).await
     }
 
     async fn render(
