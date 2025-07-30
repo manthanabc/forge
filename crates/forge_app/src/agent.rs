@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use std::time::Duration;
+
 use forge_domain::{
     Agent, ChatCompletionMessage, Context, Conversation, ModelId, ResultStream, ToolCallContext,
     ToolCallFull, ToolResult,
