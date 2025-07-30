@@ -607,6 +607,10 @@ impl<S: AgentService + WorkflowService> Orchestrator<S> {
                     is_complete = true;
                 }
             }
+
+            if is_complete {
+                self.send(ChatResponse::ChatComplete).await?;
+            }
         }
 
         Ok(())
