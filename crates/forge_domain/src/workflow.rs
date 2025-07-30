@@ -230,7 +230,7 @@ mod tests {
         assert_eq!(actual.top_k, None);
         assert_eq!(actual.max_tokens, None);
         assert_eq!(actual.tool_supported, None);
-        assert_eq!(actual.tool_call_timeout_seconds, None);
+        assert_eq!(actual.tool_timeout_seconds, None);
         assert_eq!(actual.compact, None);
     }
 
