@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::task::TaskList;
-use crate::{Agent, AgentId, Compact, Context, Error, Event, ModelId, Result, ToolName, Workflow};
+use tracing::warn;
+use crate::{task::TaskList, Agent, AgentId, Compact, Context, Error, Event, ModelId, Result, SessionMetrics, ToolName, Workflow};
 
 #[derive(Debug, Default, Display, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 #[serde(transparent)]
@@ -43,6 +43,7 @@ pub struct Conversation {
     pub tasks: TaskList,
     pub max_tool_failure_per_turn: Option<usize>,
     pub max_requests_per_turn: Option<usize>,
+    pub session_metrics: SessionMetrics,
 }
 
 impl Conversation {
@@ -73,6 +74,7 @@ impl Conversation {
 
     pub fn new(id: ConversationId, workflow: Workflow, additional_tools: Vec<ToolName>) -> Self {
         // Merge the workflow with the default workflow
+        warn!("DUBDUB");
         let mut base_workflow = Workflow::default();
         base_workflow.merge(workflow);
 
@@ -81,6 +83,8 @@ impl Conversation {
 
     fn new_inner(id: ConversationId, workflow: Workflow, additional_tools: Vec<ToolName>) -> Self {
         let mut agents = Vec::new();
+        let mut session_metrics = SessionMetrics::new();
+        session_metrics.start();
 
         for mut agent in workflow.agents.into_iter() {
             if let Some(custom_rules) = workflow.custom_rules.clone() {
@@ -180,6 +184,7 @@ impl Conversation {
             tasks: TaskList::new(),
             max_tool_failure_per_turn: workflow.max_tool_failure_per_turn,
             max_requests_per_turn: workflow.max_requests_per_turn,
+            session_metrics,
         }
     }
 

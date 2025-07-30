@@ -47,6 +47,7 @@ pub enum Tools {
     ForgeToolNetFetch(NetFetch),
     ForgeToolFollowup(Followup),
     ForgeToolAttemptCompletion(AttemptCompletion),
+    ForgeToolAttemptPartialCompletion(AttemptPartialCompletion),
     ForgeToolTaskListAppend(TaskListAppend),
     ForgeToolTaskListAppendMultiple(TaskListAppendMultiple),
     ForgeToolTaskListUpdate(TaskListUpdate),
@@ -371,18 +372,8 @@ pub struct Followup {
     pub explanation: Option<String>,
 }
 
-/// After each tool use, the user will respond with the result of
-/// that tool use, i.e. if it succeeded or failed, along with any reasons for
-/// failure. Once you've received the results of tool uses and can confirm that
-/// the task is complete, use this tool to present the result of your work to
-/// the user. The user may respond with feedback if they are not satisfied with
-/// the result, which you can use to make improvements and try again.
-/// IMPORTANT NOTE: This tool CANNOT be used until you've confirmed from the
-/// user that any previous tool uses were successful. Failure to do so will
-/// result in code corruption and system failure. Before using this tool, you
-/// must ask yourself in <forge_thinking></forge_thinking> tags if you've
-/// confirmed from the user that any previous tool uses were successful. If not,
-/// then DO NOT use this tool.
+/// Use this tool ONLY when the entire task is fully completed, all sub-tasks are done, and no further actions are required from you. This signifies the final delivery of the requested work. The user may respond with feedback if they are not satisfied with the result, which you can use to make improvements and try again.
+/// IMPORTANT NOTE: Before using this tool, you MUST ensure that all tasks in the task list are marked as DONE. If any tasks are PENDING or IN_PROGRESS, you MUST NOT use this tool. Instead, use `forge_tool_attempt_partial_completion` to report progress.
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
 pub struct AttemptCompletion {
     /// The result of the task. Formulate this result in a way that is final and
@@ -390,6 +381,16 @@ pub struct AttemptCompletion {
     /// questions or offers for further assistance.
     pub result: String,
 }
+
+/// Use this tool to provide a partial completion of the task. This is the primary tool to use when you have made progress but still have pending tasks, or when you require further input or confirmation from the user before fully completing the task. This tool is for reporting concrete, actionable partial results, not for general updates or open-ended questions.
+#[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
+pub struct AttemptPartialCompletion {
+    /// The partial result of the task. Formulate this result in a way that is
+    /// clear and concise, indicating what has been achieved and what remains.
+    pub result: String,
+}
+
+
 
 /// Add a new task to the end of the task list. Tasks are stored in conversation
 /// state and persist across agent interactions. Use this tool to add individual
@@ -573,6 +574,7 @@ impl ToolDescription for Tools {
             Tools::ForgeToolFollowup(v) => v.description(),
             Tools::ForgeToolNetFetch(v) => v.description(),
             Tools::ForgeToolAttemptCompletion(v) => v.description(),
+            Tools::ForgeToolAttemptPartialCompletion(v) => v.description(),
             Tools::ForgeToolFsSearch(v) => v.description(),
             Tools::ForgeToolFsRead(v) => v.description(),
             Tools::ForgeToolFsRemove(v) => v.description(),
@@ -614,6 +616,9 @@ impl Tools {
             Tools::ForgeToolAttemptCompletion(_) => {
                 r#gen.into_root_schema_for::<AttemptCompletion>()
             }
+            Tools::ForgeToolAttemptPartialCompletion(_) => {
+                r#gen.into_root_schema_for::<AttemptPartialCompletion>()
+            }
             Tools::ForgeToolFsSearch(_) => r#gen.into_root_schema_for::<FSSearch>(),
             Tools::ForgeToolFsRead(_) => r#gen.into_root_schema_for::<FSRead>(),
             Tools::ForgeToolFsRemove(_) => r#gen.into_root_schema_for::<FSRemove>(),
@@ -638,13 +643,23 @@ impl Tools {
         FORGE_TOOLS.contains(tool_name)
     }
     pub fn is_complete(tool_name: &ToolName) -> bool {
+        println!("FUCK {tool_name}");
         // Tools that convey that the execution should yield
         [
-            ToolsDiscriminants::ForgeToolFollowup,
             ToolsDiscriminants::ForgeToolAttemptCompletion,
+            ToolsDiscriminants::ForgeToolAttemptPartialCompletion,
         ]
-        .iter()
-        .any(|v| v.to_string().to_case(Case::Snake).eq(tool_name.as_str()))
+            .iter()
+            .any(|v| v.to_string().to_case(Case::Snake).eq(tool_name.as_str()))
+    }
+    pub fn is_completee(tool_name: &ToolName) -> bool {
+        println!("FUCK {tool_name}");
+        // Tools that convey that the execution should yield
+        [
+            ToolsDiscriminants::ForgeToolAttemptCompletion
+        ]
+            .iter()
+            .any(|v| v.to_string().to_case(Case::Snake).eq(tool_name.as_str()))
     }
 }
 
