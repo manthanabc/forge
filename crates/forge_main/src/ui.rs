@@ -10,7 +10,7 @@ use forge_api::{
     InterruptionReason, Model, ModelId, Workflow,
 };
 use forge_display::{MarkdownFormat, TitleFormat};
-use forge_domain::{McpConfig, McpServerConfig, Provider, Scope};
+use forge_domain::{McpConfig, McpServerConfig, Provider, Scope, SessionSummary};
 use forge_fs::ForgeFS;
 use forge_spinner::SpinnerManager;
 use forge_tracker::ToolCallPayload;
@@ -814,8 +814,8 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                     self.writeln(content.dimmed())?;
                 }
             }
-            ChatResponse::ChatComplete => {
-                self.on_completion(None).await?;
+            ChatResponse::ChatComplete(summary) => {
+                self.on_completion(summary).await?;
             }
         }
         Ok(())
@@ -834,20 +834,29 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
         Ok(())
     }
 
-    async fn on_completion(&mut self, summary_content: Option<String>) -> anyhow::Result<()> {
+    async fn on_completion(&mut self, summary: Option<SessionSummary>) -> anyhow::Result<()> {
         self.spinner.stop(None)?;
+
+        if let Some(s) = summary {
+            self.writeln(TitleFormat::info("Session Summary"))?;
+            self.writeln(s)?;
+        }
 
         let should_start_new_chat = ForgeSelect::confirm("Do you want to start a new chat?")
             .with_default(true)
             .prompt()?;
 
         if should_start_new_chat.unwrap_or(false) {
-            if let Some(content) = summary_content {
-                self.writeln(TitleFormat::action("Summary of previous chat:").sub_title(content))?;
-            }
             self.writeln(Info::from(&self.state))?;
             self.on_new().await?;
+        } else {
+            self.on_exit().await?;
         }
+        Ok(())
+    }
+
+    async fn on_exit(&mut self) -> anyhow::Result<()> {
+        // Add any necessary cleanup or exit logic here
         Ok(())
     }
 

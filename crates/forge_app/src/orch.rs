@@ -53,11 +53,11 @@ impl<S: AgentService> Orchestrator<S> {
 
     // Helper function to get all tool results from a vector of tool calls
     #[async_recursion]
-    async fn execute_tool_calls(
+    async fn execute_tool_calls<'a>(
         &self,
         agent: &Agent,
         tool_calls: &[ToolCallFull],
-        tool_context: &mut ToolCallContext,
+        tool_context: &mut ToolCallContext<'a>,
     ) -> anyhow::Result<Vec<(ToolCallFull, ToolResult)>> {
         // Always process tool calls sequentially
         let mut tool_call_records = Vec::with_capacity(tool_calls.len());
@@ -377,7 +377,13 @@ impl<S: AgentService> Orchestrator<S> {
         // Retrieve the number of requests allowed per tick.
         let max_requests_per_turn = self.conversation.max_requests_per_turn;
 
+        let mut session_metrics = SessionMetrics::new();
+        session_metrics.start();
+
         while !is_complete {
+            let mut tool_context =
+                ToolCallContext::new(self.conversation.tasks.clone(), &mut session_metrics)
+                    .sender(self.sender.clone());
             // Set context for the current loop iteration
             self.conversation.context = Some(context.clone());
             self.services.update(self.conversation.clone()).await?;
@@ -470,9 +476,6 @@ impl<S: AgentService> Orchestrator<S> {
                 self.send(ChatResponse::Reasoning { content: reasoning.to_string() })
                     .await?;
             }
-
-            let mut tool_context =
-                ToolCallContext::new(self.conversation.tasks.clone()).sender(self.sender.clone());
 
             // Check if tool calls are within allowed limits if max_tool_failure_per_turn is
             // configured
@@ -570,7 +573,7 @@ impl<S: AgentService> Orchestrator<S> {
 
             // Update context in the conversation
             context = SetModel::new(model_id.clone()).transform(context);
-            self.conversation.tasks = tool_context.tasks;
+            self.conversation.tasks = tool_context.tasks.clone();
             self.conversation.context = Some(context.clone());
             self.services.update(self.conversation.clone()).await?;
             request_count += 1;
@@ -599,7 +602,8 @@ impl<S: AgentService> Orchestrator<S> {
         }
 
         if is_complete {
-            self.send(ChatResponse::ChatComplete).await?;
+            let summary = SessionSummary::from(&session_metrics);
+            self.send(ChatResponse::ChatComplete(Some(summary))).await?;
         }
 
         Ok(())

@@ -639,12 +639,9 @@ impl Tools {
     }
     pub fn is_complete(tool_name: &ToolName) -> bool {
         // Tools that convey that the execution should yield
-        [
-            ToolsDiscriminants::ForgeToolFollowup,
-            ToolsDiscriminants::ForgeToolAttemptCompletion,
-        ]
-        .iter()
-        .any(|v| v.to_string().to_case(Case::Snake).eq(tool_name.as_str()))
+        [ToolsDiscriminants::ForgeToolAttemptCompletion]
+            .iter()
+            .any(|v| v.to_string().to_case(Case::Snake).eq(tool_name.as_str()))
     }
 }
 

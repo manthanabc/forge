@@ -156,7 +156,7 @@ impl<
     pub async fn execute(
         &self,
         input: ToolCallFull,
-        context: &mut ToolCallContext,
+        context: &mut ToolCallContext<'_>,
     ) -> anyhow::Result<ToolOutput> {
         let tool_name = input.name.clone();
         let tool_input = Tools::try_from(input).map_err(Error::CallArgument)?;
@@ -185,6 +185,6 @@ impl<
             .to_create_temp(self.services.as_ref())
             .await?;
 
-        Ok(execution_result.into_tool_output(tool_name, truncation_path, &env))
+        Ok(execution_result.into_tool_output(tool_name, truncation_path, &env, Some(&mut context.session_metrics)))
     }
 }

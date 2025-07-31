@@ -1,0 +1,282 @@
+use std::collections::HashMap;
+use std::time::{Duration, Instant};
+
+use derive_setters::Setters;
+
+/// Tracks metrics for individual file changes during a session
+#[derive(Debug, Clone, Default, Setters)]
+#[setters(into, strip_option)]
+pub struct FileChangeMetrics {
+    /// Total lines added to this file
+    pub lines_added: u64,
+    /// Total lines removed from this file
+    pub lines_removed: u64,
+    /// Number of operations performed on this file
+    pub operations_count: u64,
+}
+
+impl FileChangeMetrics {
+    /// Creates a new FileChangeMetrics instance
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Adds operation metrics to this file's tracking
+    pub fn add_operation(&mut self, lines_added: u64, lines_removed: u64) {
+        self.lines_added += lines_added;
+        self.lines_removed += lines_removed;
+        self.operations_count += 1;
+    }
+
+    /// Gets the net change in lines for this file
+    pub fn net_change(&self) -> i64 {
+        self.lines_added as i64 - self.lines_removed as i64
+    }
+}
+
+/// Aggregates session metrics including file changes, operations, and duration
+#[derive(Debug, Clone, Default, Setters)]
+#[setters(into, strip_option)]
+pub struct SessionMetrics {
+    /// When the session started tracking
+    pub start_time: Option<Instant>,
+    /// Tracks changes per file path
+    pub files_changed: HashMap<String, FileChangeMetrics>,
+    /// Total lines added across all files
+    pub total_lines_added: u64,
+    /// Total lines removed across all files
+    pub total_lines_removed: u64,
+    /// Total number of file operations performed
+    pub operations_count: u64,
+}
+
+impl SessionMetrics {
+    /// Creates a new SessionMetrics instance
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Starts tracking session metrics
+    pub fn start(&mut self) {
+        self.start_time = Some(Instant::now());
+    }
+
+    /// Records a file operation with the specified metrics
+    pub fn record_file_operation(&mut self, path: String, lines_added: u64, lines_removed: u64) {
+        // Update file-specific metrics
+        let file_metrics = self.files_changed.entry(path).or_default();
+        file_metrics.add_operation(lines_added, lines_removed);
+
+        // Update totals
+        self.total_lines_added += lines_added;
+        self.total_lines_removed += lines_removed;
+        self.operations_count += 1;
+    }
+
+    /// Gets the session duration if tracking has started
+    pub fn duration(&self) -> Option<Duration> {
+        self.start_time.map(|start| start.elapsed())
+    }
+
+    /// Gets the number of unique files changed
+    pub fn files_changed_count(&self) -> usize {
+        self.files_changed.len()
+    }
+
+    /// Gets the net change in lines across all files
+    pub fn net_change(&self) -> i64 {
+        self.total_lines_added as i64 - self.total_lines_removed as i64
+    }
+
+    /// Resets all metrics to their initial state
+    pub fn reset(&mut self) {
+        *self = Self::new();
+    }
+}
+
+/// Formatted session summary for display
+#[derive(Debug, Clone)]
+pub struct SessionSummary {
+    pub duration: String,
+    pub files_changed: usize,
+    pub lines_added: u64,
+    pub lines_removed: u64,
+    pub net_change: i64,
+    pub operations: u64,
+}
+
+impl From<&SessionMetrics> for SessionSummary {
+    fn from(metrics: &SessionMetrics) -> Self {
+        let duration = match metrics.duration() {
+            Some(d) => {
+                let total_seconds = d.as_secs();
+                let minutes = total_seconds / 60;
+                let seconds = total_seconds % 60;
+                format!("{}m {}s", minutes, seconds)
+            }
+            None => "0m 0s".to_string(),
+        };
+
+        Self {
+            duration,
+            files_changed: metrics.files_changed_count(),
+            lines_added: metrics.total_lines_added,
+            lines_removed: metrics.total_lines_removed,
+            net_change: metrics.net_change(),
+            operations: metrics.operations_count,
+        }
+    }
+}
+
+impl std::fmt::Display for SessionSummary {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "SESSION SUMMARY")?;
+        writeln!(f, "Duration: {}", self.duration)?;
+        writeln!(f, "Files Changed: {}", self.files_changed)?;
+        writeln!(f, "Lines Added: {}", self.lines_added)?;
+        writeln!(f, "Lines Removed: {}", self.lines_removed)?;
+        
+        let net_change_sign = if self.net_change >= 0 { "+" } else { "" };
+        writeln!(f, "Net Change: {}{} lines", net_change_sign, self.net_change)?;
+        writeln!(f, "Operations: {}", self.operations)?;
+        
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_file_change_metrics_new() {
+        let fixture = FileChangeMetrics::new();
+        let actual = fixture;
+        let expected = FileChangeMetrics {
+            lines_added: 0,
+            lines_removed: 0,
+            operations_count: 0,
+        };
+        assert_eq!(actual.lines_added, expected.lines_added);
+        assert_eq!(actual.lines_removed, expected.lines_removed);
+        assert_eq!(actual.operations_count, expected.operations_count);
+    }
+
+    #[test]
+    fn test_file_change_metrics_add_operation() {
+        let mut fixture = FileChangeMetrics::new();
+        fixture.add_operation(10, 5);
+        fixture.add_operation(3, 2);
+        
+        let actual = fixture;
+        let expected = FileChangeMetrics {
+            lines_added: 13,
+            lines_removed: 7,
+            operations_count: 2,
+        };
+        assert_eq!(actual.lines_added, expected.lines_added);
+        assert_eq!(actual.lines_removed, expected.lines_removed);
+        assert_eq!(actual.operations_count, expected.operations_count);
+    }
+
+    #[test]
+    fn test_file_change_metrics_net_change() {
+        let mut fixture = FileChangeMetrics::new();
+        fixture.add_operation(10, 5);
+        
+        let actual = fixture.net_change();
+        let expected = 5;
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_session_metrics_new() {
+        let fixture = SessionMetrics::new();
+        let actual = fixture;
+        
+        assert_eq!(actual.start_time, None);
+        assert_eq!(actual.files_changed.len(), 0);
+        assert_eq!(actual.total_lines_added, 0);
+        assert_eq!(actual.total_lines_removed, 0);
+        assert_eq!(actual.operations_count, 0);
+    }
+
+    #[test]
+    fn test_session_metrics_record_file_operation() {
+        let mut fixture = SessionMetrics::new();
+        fixture.record_file_operation("file1.rs".to_string(), 10, 5);
+        fixture.record_file_operation("file2.rs".to_string(), 3, 2);
+        fixture.record_file_operation("file1.rs".to_string(), 5, 1);
+        
+        let actual = fixture;
+        
+        assert_eq!(actual.files_changed_count(), 2);
+        assert_eq!(actual.total_lines_added, 18);
+        assert_eq!(actual.total_lines_removed, 8);
+        assert_eq!(actual.operations_count, 3);
+        
+        let file1_metrics = actual.files_changed.get("file1.rs").unwrap();
+        assert_eq!(file1_metrics.lines_added, 15);
+        assert_eq!(file1_metrics.lines_removed, 6);
+        assert_eq!(file1_metrics.operations_count, 2);
+    }
+
+    #[test]
+    fn test_session_metrics_net_change() {
+        let mut fixture = SessionMetrics::new();
+        fixture.record_file_operation("file1.rs".to_string(), 10, 5);
+        
+        let actual = fixture.net_change();
+        let expected = 5;
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_session_summary_from_metrics() {
+        let mut fixture = SessionMetrics::new();
+        fixture.start();
+        fixture.record_file_operation("file1.rs".to_string(), 247, 89);
+        fixture.record_file_operation("file2.rs".to_string(), 50, 20);
+        
+        let actual = SessionSummary::from(&fixture);
+        
+        assert_eq!(actual.files_changed, 2);
+        assert_eq!(actual.lines_added, 297);
+        assert_eq!(actual.lines_removed, 109);
+        assert_eq!(actual.net_change, 188);
+        assert_eq!(actual.operations, 2);
+    }
+
+    #[test]
+    fn test_session_summary_display() {
+        let fixture = SessionSummary {
+            duration: "15m 32s".to_string(),
+            files_changed: 8,
+            lines_added: 247,
+            lines_removed: 89,
+            net_change: 158,
+            operations: 23,
+        };
+        
+        let actual = format!("{}", fixture);
+        let expected = "SESSION SUMMARY\nDuration: 15m 32s\nFiles Changed: 8\nLines Added: 247\nLines Removed: 89\nNet Change: +158 lines\nOperations: 23\n";
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_session_summary_display_negative_net_change() {
+        let fixture = SessionSummary {
+            duration: "5m 10s".to_string(),
+            files_changed: 3,
+            lines_added: 50,
+            lines_removed: 75,
+            net_change: -25,
+            operations: 5,
+        };
+        
+        let actual = format!("{}", fixture);
+        let expected = "SESSION SUMMARY\nDuration: 5m 10s\nFiles Changed: 3\nLines Added: 50\nLines Removed: 75\nNet Change: -25 lines\nOperations: 5\n";
+        assert_eq!(actual, expected);
+    }
+}
