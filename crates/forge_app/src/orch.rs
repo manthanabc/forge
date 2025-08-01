@@ -63,6 +63,7 @@ impl<S: AgentService> Orchestrator<S> {
         let mut tool_call_records = Vec::with_capacity(tool_calls.len());
 
         for tool_call in tool_calls {
+            info!(agent_id = %agent.id, tool_name = %tool_call.name, "Executing tool");
             // Send the start notification
             self.send(ChatResponse::ToolCallStart(tool_call.clone()))
                 .await?;
@@ -370,6 +371,7 @@ impl<S: AgentService> Orchestrator<S> {
 
         // Indicates whether the tool execution has been completed
         let mut is_complete = false;
+        let mut has_attempted_completion = false;
 
         let mut empty_tool_call_count = 0;
         let mut request_count = 0;
@@ -379,6 +381,8 @@ impl<S: AgentService> Orchestrator<S> {
 
         let mut session_metrics = SessionMetrics::new();
         session_metrics.start();
+
+        
 
         while !is_complete {
             let mut tool_context =
@@ -452,7 +456,13 @@ impl<S: AgentService> Orchestrator<S> {
 
             debug!(agent_id = %agent.id, tool_call_count = tool_calls.len(), "Tool call count");
 
-            is_complete = tool_calls.iter().any(|call| Tools::is_complete(&call.name));
+            is_complete = tool_calls.iter().any(|call| {
+                let is_completion = Tools::is_completee(&call.name);
+                if is_completion {
+                    has_attempted_completion = true;
+                }
+                is_completion
+            });
 
             if !is_complete && !has_no_tool_calls {
                 // If task is completed we would have already displayed a message so we can
@@ -601,9 +611,11 @@ impl<S: AgentService> Orchestrator<S> {
             }
         }
 
-        if is_complete {
+        if has_attempted_completion {
             let summary = SessionSummary::from(&session_metrics);
             self.send(ChatResponse::ChatComplete(Some(summary))).await?;
+        } else {
+            // self.send(ChatResponse::ChatComplete(None)).await?;
         }
 
         Ok(())
