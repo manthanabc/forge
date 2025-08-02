@@ -62,6 +62,7 @@ impl<S: AgentService> Orchestrator<S> {
         // Always process tool calls sequentially
         let mut tool_call_records = Vec::with_capacity(tool_calls.len());
 
+        // get tiemout from env
         for tool_call in tool_calls {
             info!(agent_id = %agent.id, tool_name = %tool_call.name, "Executing tool");
             // Send the start notification
@@ -463,6 +464,10 @@ impl<S: AgentService> Orchestrator<S> {
                 }
                 is_completion
             });
+            is_complete = tool_calls.iter().any(|call| {
+                let is_completion = Tools::is_complete(&call.name);
+                is_completion
+            });
 
             if !is_complete && !has_no_tool_calls {
                 // If task is completed we would have already displayed a message so we can
@@ -614,10 +619,7 @@ impl<S: AgentService> Orchestrator<S> {
         if has_attempted_completion {
             let summary = SessionSummary::from(&session_metrics);
             self.send(ChatResponse::ChatComplete(Some(summary))).await?;
-        } else {
-            // self.send(ChatResponse::ChatComplete(None)).await?;
         }
-
         Ok(())
     }
 
