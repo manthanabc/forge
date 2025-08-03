@@ -47,6 +47,7 @@ mod update;
 mod workflow;
 mod xml;
 
+pub mod metrics;
 pub use agent::*;
 pub use attachment::*;
 pub use chat_request::*;
@@ -72,7 +73,7 @@ pub use provider::*;
 pub use reasoning::*;
 pub use result_stream_ext::*;
 pub use retry_config::*;
-pub use session_metrics::*;
+
 pub use shell::*;
 pub use suggestion::*;
 pub use system_context::*;

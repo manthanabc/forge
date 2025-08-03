@@ -34,6 +34,7 @@ eserde.workspace = true
 url.workspace = true
 reqwest.workspace = true
 bytes.workspace = true
+forge_tracker = { path = "../forge_tracker" }
 
 [dev-dependencies]
 pretty_assertions.workspace = true

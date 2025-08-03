@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::{SessionSummary, ToolCallFull, ToolResult, Usage};
+use crate::{metrics::SessionSummary, ToolCallFull, ToolResult, Usage};
 
 /// Events that are emitted by the agent for external consumption. This includes
 /// events for all internal state changes.

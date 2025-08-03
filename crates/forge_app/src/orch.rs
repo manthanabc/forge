@@ -12,11 +12,13 @@ use tracing::{debug, info, warn};
 use crate::agent::AgentService;
 use crate::compact::Compactor;
 
+use forge_domain::metrics::Metrics;
+
 pub type ArcSender = Arc<tokio::sync::mpsc::Sender<anyhow::Result<ChatResponse>>>;
 
 #[derive(Clone, Setters)]
 #[setters(into, strip_option)]
-pub struct Orchestrator<S> {
+pub struct Orchestrator<S, M: Metrics> {
     services: Arc<S>,
     sender: Option<ArcSender>,
     conversation: Conversation,
@@ -25,14 +27,16 @@ pub struct Orchestrator<S> {
     models: Vec<Model>,
     files: Vec<String>,
     current_time: chrono::DateTime<chrono::Local>,
+    metrics: Arc<std::sync::Mutex<M>>,
 }
 
-impl<S: AgentService> Orchestrator<S> {
+impl<S: AgentService, M: Metrics + Clone> Orchestrator<S, M> {
     pub fn new(
         services: Arc<S>,
         environment: Environment,
         conversation: Conversation,
         current_time: chrono::DateTime<chrono::Local>,
+        metrics: Arc<std::sync::Mutex<M>>,
     ) -> Self {
         Self {
             conversation,
@@ -43,6 +47,7 @@ impl<S: AgentService> Orchestrator<S> {
             models: Default::default(),
             files: Default::default(),
             current_time,
+            metrics,
         }
     }
 
@@ -381,12 +386,12 @@ impl<S: AgentService> Orchestrator<S> {
         let max_requests_per_turn = self.conversation.max_requests_per_turn;
 
         warn!("FUCKED CLONED");
-        let mut session_metrics = self.conversation.session_metrics.clone();
+        let mut metrics = (*self.metrics.lock().unwrap()).clone();
 
         while !is_complete {
             let mut tool_context = ToolCallContext::new(
                 self.conversation.tasks.clone(),
-                &mut session_metrics,
+                &mut metrics,
             )
             .sender(self.sender.clone());
             // Set context for the current loop iteration
@@ -618,11 +623,11 @@ impl<S: AgentService> Orchestrator<S> {
 
         if has_attempted_completion {
             warn!("GOTA");
-            let summary = SessionSummary::from(&session_metrics);
+            let summary = metrics.summary();
             self.send(ChatResponse::ChatComplete(Some(summary))).await?;
         }
 
-        self.conversation.session_metrics = session_metrics;
+        *self.metrics.lock().unwrap() = metrics;
         
         Ok(())
     }

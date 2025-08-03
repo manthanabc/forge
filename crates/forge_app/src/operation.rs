@@ -3,8 +3,8 @@ use forge_display::DiffFormat;
 use std::path::{Path, PathBuf};
 use derive_setters::Setters;
 
-use forge_domain::{
-    Environment, FSPatch, FSRead, FSRemove, FSSearch, FSUndo, FSWrite, NetFetch, SessionMetrics,
+use forge_domain::{metrics::Metrics,
+    Environment, FSPatch, FSRead, FSRemove, FSSearch, FSUndo, FSWrite, NetFetch,
     TaskList, TaskListAppend, TaskListAppendMultiple, TaskListClear, TaskListList, TaskListUpdate,
     ToolName,
 };
@@ -26,7 +26,7 @@ struct FileOperationStats {
     lines_removed: u64,
 }
 
-fn file_change_stats(operation: FileOperationStats, session_metrics: Option<&mut SessionMetrics>) {
+fn file_change_stats(operation: FileOperationStats, session_metrics: Option<&mut dyn Metrics>) {
     tracing::info!(path = %operation.path, type = %operation.tool_name, lines_added = %operation.lines_added, lines_removed = %operation.lines_removed, "File change stats");
     
     // Record metrics in session if available
@@ -149,7 +149,7 @@ impl Operation {
         tool_name: ToolName,
         content_files: TempContentFiles,
         env: &Environment,
-        session_metrics: Option<&mut SessionMetrics>,
+        session_metrics: Option<&mut dyn Metrics>,
     ) -> forge_domain::ToolOutput {
         match self {
             Operation::FsRead { input, output } => match &output.content {
@@ -167,19 +167,21 @@ impl Operation {
                 }
             },
             Operation::FsCreate { input, output } => {
-                let elm = if let Some(before_content) = &output.before {
+                let (lines_added, lines_removed, elm) = if let Some(before_content) = &output.before {
                     let diff_result = DiffFormat::format(before_content, &input.content);
-                    file_change_stats(FileOperationStats {
-                        path: input.path.clone(),
-                        tool_name,
-                        lines_added: diff_result.lines_added(),
-                        lines_removed: diff_result.lines_removed(),
-                    }, session_metrics);
-
-                    Element::new("file_overwritten").append(Element::new("file_diff").cdata(diff_result.diff().to_string()))
+                    let elm = Element::new("file_overwritten").append(Element::new("file_diff").cdata(diff_result.diff().to_string()));
+                    (diff_result.lines_added(), diff_result.lines_removed(), elm)
                 } else {
-                    Element::new("file_created")
+                    let elm = Element::new("file_created");
+                    (input.content.lines().count() as u64, 0, elm)
                 };
+
+                file_change_stats(FileOperationStats {
+                    path: input.path.clone(),
+                    tool_name,
+                    lines_added,
+                    lines_removed,
+                }, session_metrics);
 
                 let mut elm =
                     elm.attr("path", input.path)

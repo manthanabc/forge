@@ -1,10 +1,12 @@
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
 use chrono::Local;
 use forge_domain::*;
 use forge_stream::MpscStream;
+use forge_tracker::metrics::MetricsService;
+use forge_domain::metrics::Metrics;
 
 use crate::authenticator::Authenticator;
 use crate::orch::Orchestrator;
@@ -92,12 +94,16 @@ impl<S: Services> ForgeApp<S> {
             chat.event = chat.event.attachments(attachments);
         }
 
+        let metrics = Arc::new(Mutex::new(MetricsService::new()));
+        metrics.lock().unwrap().start();
+
         // Create the orchestrator with all necessary dependencies
         let orch = Orchestrator::new(
             services.clone(),
             environment.clone(),
             conversation,
             Local::now(),
+            metrics,
         )
         .tool_definitions(tool_definitions)
         .models(models)
