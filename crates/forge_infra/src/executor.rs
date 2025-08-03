@@ -189,6 +189,7 @@ mod tests {
             max_read_size: 0,
             stdout_max_suffix_length: 0,
             http: Default::default(),
+            tool_timeout: 300,
             max_file_size: 10_000_000,
             forge_api_url: Url::parse("http://forgecode.dev/api").unwrap(),
         }

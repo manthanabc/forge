@@ -61,6 +61,7 @@ impl ForgeEnvironmentInfra {
             max_read_size: 500,
             stdout_max_prefix_length: 200,
             stdout_max_suffix_length: 200,
+            tool_timeout: parse_env::<u64>("FORGE_TOOL_TIMEOUT").unwrap_or(300),
             http: resolve_http_config(),
             max_file_size: 256 << 10, // 256 KiB
             forge_api_url,
@@ -744,6 +745,45 @@ mod tests {
                 unsafe {
                     env::remove_var("FORGE_HTTP_MIN_TLS_VERSION");
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn test_tool_timeout_env_var() {
+        let cwd = tempdir().unwrap().path().to_path_buf();
+        let infra = ForgeEnvironmentInfra::new(false, cwd);
+
+        // Test Default value when env var is not set
+        {
+            unsafe {
+                env::remove_var("FORGE_TOOL_TIMEOUT");
+            }
+            let env = infra.get_environment();
+            assert_eq!(env.tool_timeout, 300);
+        }
+
+        // Test Value from env var
+        {
+            unsafe {
+                env::set_var("FORGE_TOOL_TIMEOUT", "15");
+            }
+            let env = infra.get_environment();
+            assert_eq!(env.tool_timeout, 15);
+            unsafe {
+                env::remove_var("FORGE_TOOL_TIMEOUT");
+            }
+        }
+
+        // Test Fallback to default for invalid value
+        {
+            unsafe {
+                env::set_var("TOOL_TIMEOUT_SECONDS", "not-a-number");
+            }
+            let env = infra.get_environment();
+            assert_eq!(env.tool_timeout, 300);
+            unsafe {
+                env::remove_var("TOOL_TIMEOUT_SECONDS");
             }
         }
     }
