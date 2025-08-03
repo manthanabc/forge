@@ -1,10 +1,12 @@
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
+use chrono::{DateTime, Utc};
 use derive_setters::Setters;
+use serde::{Deserialize, Serialize};
 
 /// Tracks metrics for individual file changes during a session
-#[derive(Debug, Clone, Default, Setters)]
+#[derive(Debug, Clone, Default, Setters, Serialize, Deserialize)]
 #[setters(into, strip_option)]
 pub struct FileChangeMetrics {
     /// Total lines added to this file
@@ -35,11 +37,11 @@ impl FileChangeMetrics {
 }
 
 /// Aggregates session metrics including file changes, operations, and duration
-#[derive(Debug, Clone, Default, Setters)]
+#[derive(Debug, Clone, Default, Setters, Serialize, Deserialize)]
 #[setters(into, strip_option)]
 pub struct SessionMetrics {
     /// When the session started tracking
-    pub start_time: Option<Instant>,
+    pub started_at: Option<DateTime<Utc>>,
     /// Tracks changes per file path
     pub files_changed: HashMap<String, FileChangeMetrics>,
     /// Total lines added across all files
@@ -58,7 +60,7 @@ impl SessionMetrics {
 
     /// Starts tracking session metrics
     pub fn start(&mut self) {
-        self.start_time = Some(Instant::now());
+        self.started_at = Some(Utc::now());
     }
 
     /// Records a file operation with the specified metrics
@@ -75,7 +77,8 @@ impl SessionMetrics {
 
     /// Gets the session duration if tracking has started
     pub fn duration(&self) -> Option<Duration> {
-        self.start_time.map(|start| start.elapsed())
+        self.started_at
+            .map(|start| (Utc::now() - start).to_std().unwrap_or_default())
     }
 
     /// Gets the number of unique files changed

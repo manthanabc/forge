@@ -380,15 +380,15 @@ impl<S: AgentService> Orchestrator<S> {
         // Retrieve the number of requests allowed per tick.
         let max_requests_per_turn = self.conversation.max_requests_per_turn;
 
-        let mut session_metrics = SessionMetrics::new();
-        session_metrics.start();
-
-        
+        warn!("FUCKED CLONED");
+        let mut session_metrics = self.conversation.session_metrics.clone();
 
         while !is_complete {
-            let mut tool_context =
-                ToolCallContext::new(self.conversation.tasks.clone(), &mut session_metrics)
-                    .sender(self.sender.clone());
+            let mut tool_context = ToolCallContext::new(
+                self.conversation.tasks.clone(),
+                &mut session_metrics,
+            )
+            .sender(self.sender.clone());
             // Set context for the current loop iteration
             self.conversation.context = Some(context.clone());
             self.services.update(self.conversation.clone()).await?;
@@ -617,9 +617,13 @@ impl<S: AgentService> Orchestrator<S> {
         }
 
         if has_attempted_completion {
+            warn!("GOTA");
             let summary = SessionSummary::from(&session_metrics);
             self.send(ChatResponse::ChatComplete(Some(summary))).await?;
         }
+
+        self.conversation.session_metrics = session_metrics;
+        
         Ok(())
     }
 
