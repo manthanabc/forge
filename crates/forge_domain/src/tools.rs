@@ -643,7 +643,6 @@ impl Tools {
         FORGE_TOOLS.contains(tool_name)
     }
     pub fn is_complete(tool_name: &ToolName) -> bool {
-        println!("FUCK {tool_name}");
         // Tools that convey that the execution should yield
         [
             ToolsDiscriminants::ForgeToolAttemptCompletion,
@@ -653,7 +652,6 @@ impl Tools {
             .any(|v| v.to_string().to_case(Case::Snake).eq(tool_name.as_str()))
     }
     pub fn is_completee(tool_name: &ToolName) -> bool {
-        println!("FUCK {tool_name}");
         // Tools that convey that the execution should yield
         [
             ToolsDiscriminants::ForgeToolAttemptCompletion
