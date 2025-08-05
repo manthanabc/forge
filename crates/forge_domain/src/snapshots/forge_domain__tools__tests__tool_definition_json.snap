@@ -329,7 +329,7 @@ expression: tools
 }
 {
   "name": "forge_tool_attempt_completion",
-  "description": "Use this tool ONLY when the entire task is fully completed, all sub-tasks are done, and no further actions are required from you. This signifies the final delivery of the requested work. The user may respond with feedback if they are not satisfied with the result, which you can use to make improvements and try again.\n IMPORTANT NOTE: Before using this tool, you MUST ensure that all tasks in the task list are marked as DONE. If any tasks are PENDING or IN_PROGRESS, or if you expect more input you MUST NOT use this tool. Instead, use `forge_tool_partial_completion` to report progress.",
+  "description": "Use this tool ONLY when the entire task is fully completed, all sub-tasks\n are done, and no further actions are required from you. This signifies the\n final delivery of the requested work. The user may respond with feedback if\n they are not satisfied with the result, which you can use to make\n improvements and try again. IMPORTANT NOTE: Before using this tool, you MUST\n ensure that all tasks in the task list are marked as DONE. If any tasks are\n PENDING or IN_PROGRESS, or if you expect more input you MUST NOT use this\n tool. Instead, use `forge_tool_partial_completion` to report progress.",
   "input_schema": {
     "title": "AttemptCompletion",
     "description": "Use this tool ONLY when the entire task is fully completed, all sub-tasks are done, and no further actions are required from you. This signifies the final delivery of the requested work. The user may respond with feedback if they are not satisfied with the result, which you can use to make improvements and try again. IMPORTANT NOTE: Before using this tool, you MUST ensure that all tasks in the task list are marked as DONE. If any tasks are PENDING or IN_PROGRESS, or if you expect more input you MUST NOT use this tool. Instead, use `forge_tool_partial_completion` to report progress.",
@@ -347,7 +347,7 @@ expression: tools
 }
 {
   "name": "forge_tool_partial_completion",
-  "description": "Use this tool to provide a partial completion of the task. This is the primary tool to use when you have made progress but still have pending tasks, or when you require further input or confirmation from the user before fully completing the task. This tool is for reporting concrete, actionable partial results, not for general updates or open-ended questions.",
+  "description": "Use this tool to provide a partial completion of the task. This is the\n primary tool to use when you have made progress but still have pending\n tasks, or when you require further input or confirmation from the user\n before fully completing the task. This tool is for reporting concrete,\n actionable partial results, not for general updates or open-ended questions.",
   "input_schema": {
     "title": "PartialCompletion",
     "description": "Use this tool to provide a partial completion of the task. This is the primary tool to use when you have made progress but still have pending tasks, or when you require further input or confirmation from the user before fully completing the task. This tool is for reporting concrete, actionable partial results, not for general updates or open-ended questions.",
