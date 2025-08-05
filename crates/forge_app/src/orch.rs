@@ -9,7 +9,6 @@ use forge_template::Element;
 use serde_json::Value;
 use tracing::{debug, info, warn};
 
-use crate::EnvironmentService;
 use crate::agent::AgentService;
 use crate::compact::Compactor;
 
@@ -28,7 +27,7 @@ pub struct Orchestrator<S> {
     current_time: chrono::DateTime<chrono::Local>,
 }
 
-impl<S: AgentService + EnvironmentService> Orchestrator<S> {
+impl<S: AgentService> Orchestrator<S> {
     pub fn new(
         services: Arc<S>,
         environment: Environment,
@@ -63,7 +62,7 @@ impl<S: AgentService + EnvironmentService> Orchestrator<S> {
         // Always process tool calls sequentially
         let mut tool_call_records = Vec::with_capacity(tool_calls.len());
 
-        let tool_timeout = Duration::from_secs(self.services.get_environment().tool_timeout);
+        let tool_timeout = Duration::from_secs(self.environment.tool_timeout);
 
         for tool_call in tool_calls {
             // Send the start notification
