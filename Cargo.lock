@@ -1339,6 +1339,7 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "chrono",
+ "colored",
  "convert_case",
  "derive-getters",
  "derive_more",

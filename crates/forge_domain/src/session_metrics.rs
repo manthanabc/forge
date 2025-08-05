@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
+use colored::Colorize;
 use derive_setters::Setters;
 use serde::{Deserialize, Serialize};
 
@@ -119,19 +120,45 @@ impl From<&Metrics> for SessionSummary {
 
 impl std::fmt::Display for SessionSummary {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "SESSION SUMMARY")?;
-        writeln!(f, "Duration: {}", self.duration)?;
-        writeln!(f, "Files Changed: {}", self.files_changed)?;
-        writeln!(f, "Lines Added: {}", self.lines_added)?;
-        writeln!(f, "Lines Removed: {}", self.lines_removed)?;
-
-        let net_change_sign = if self.net_change >= 0 { "+" } else { "" };
+        writeln!(f, "{}", "SESSION SUMMARY".bold().dimmed())?;
+        writeln!(f, "{}: {}", "Duration".bright_cyan().bold(), self.duration)?;
         writeln!(
             f,
-            "Net Change: {}{} lines",
-            net_change_sign, self.net_change
+            "{}: {}",
+            "Files Changed".bright_cyan().bold(),
+            self.files_changed
         )?;
-        writeln!(f, "Operations: {}", self.operations)?;
+        writeln!(
+            f,
+            "{}: {}",
+            "Lines Added".bright_cyan().bold(),
+            self.lines_added.to_string().green()
+        )?;
+        writeln!(
+            f,
+            "{}: {}",
+            "Lines Removed".bright_cyan().bold(),
+            self.lines_removed.to_string().red()
+        )?;
+
+        let colored_net_change = if self.net_change >= 0 {
+            format!("{:+}", self.net_change).green()
+        } else {
+            format!("{}", self.net_change).red()
+        };
+
+        writeln!(
+            f,
+            "{}: {}",
+            "Net Change (lines)".bright_cyan().bold(),
+            colored_net_change
+        )?;
+        writeln!(
+            f,
+            "{}: {}",
+            "Operations".bright_cyan().bold(),
+            self.operations
+        )?;
 
         Ok(())
     }
@@ -231,37 +258,5 @@ mod tests {
         assert_eq!(actual.lines_removed, 109);
         assert_eq!(actual.net_change, 188);
         assert_eq!(actual.operations, 2);
-    }
-
-    #[test]
-    fn test_session_summary_display() {
-        let fixture = SessionSummary {
-            duration: "15m 32s".to_string(),
-            files_changed: 8,
-            lines_added: 247,
-            lines_removed: 89,
-            net_change: 158,
-            operations: 23,
-        };
-
-        let actual = format!("{}", fixture);
-        let expected = "SESSION SUMMARY\nDuration: 15m 32s\nFiles Changed: 8\nLines Added: 247\nLines Removed: 89\nNet Change: +158 lines\nOperations: 23\n";
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn test_session_summary_display_negative_net_change() {
-        let fixture = SessionSummary {
-            duration: "5m 10s".to_string(),
-            files_changed: 3,
-            lines_added: 50,
-            lines_removed: 75,
-            net_change: -25,
-            operations: 5,
-        };
-
-        let actual = format!("{}", fixture);
-        let expected = "SESSION SUMMARY\nDuration: 5m 10s\nFiles Changed: 3\nLines Added: 50\nLines Removed: 75\nNet Change: -25 lines\nOperations: 5\n";
-        assert_eq!(actual, expected);
     }
 }

@@ -841,13 +841,15 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             .with_default(true)
             .prompt()?;
 
+        // if conversation is over
         if should_start_new_chat.unwrap_or(false) {
-            // Show summary if conversation is over
+            // Show usage info
+            self.writeln(Info::from(&self.state))?;
+
+            // Show summary
             if let Some(s) = summary {
-                self.writeln(TitleFormat::info("Session Summary"))?;
                 self.writeln(s)?;
             }
-            self.writeln(Info::from(&self.state))?;
             self.on_new().await?;
         }
 
