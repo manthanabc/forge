@@ -5,25 +5,20 @@ use chrono::{DateTime, Utc};
 use derive_setters::Setters;
 use serde::{Deserialize, Serialize};
 
-/// Tracks metrics for individual file changes during a session
+/// Tracks metrics for individual file changes
 #[derive(Debug, Clone, Default, Setters, Serialize, Deserialize)]
 #[setters(into, strip_option)]
 pub struct FileChangeMetrics {
-    /// Total lines added to this file
     pub lines_added: u64,
-    /// Total lines removed from this file
     pub lines_removed: u64,
-    /// Number of operations performed on this file
     pub operations_count: u64,
 }
 
 impl FileChangeMetrics {
-    /// Creates a new FileChangeMetrics instance
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Adds operation metrics to this file's tracking
     pub fn add_operation(&mut self, lines_added: u64, lines_removed: u64) {
         self.lines_added += lines_added;
         self.lines_removed += lines_removed;
@@ -40,20 +35,14 @@ impl FileChangeMetrics {
 #[derive(Debug, Clone, Default, Setters, Serialize, Deserialize)]
 #[setters(into, strip_option)]
 pub struct SessionMetrics {
-    /// When the session started tracking
     pub started_at: Option<DateTime<Utc>>,
-    /// Tracks changes per file path
     pub files_changed: HashMap<String, FileChangeMetrics>,
-    /// Total lines added across all files
     pub total_lines_added: u64,
-    /// Total lines removed across all files
     pub total_lines_removed: u64,
-    /// Total number of file operations performed
     pub operations_count: u64,
 }
 
 impl SessionMetrics {
-    /// Creates a new SessionMetrics instance
     pub fn new() -> Self {
         Self::default()
     }
@@ -63,7 +52,6 @@ impl SessionMetrics {
         self.started_at = Some(Utc::now());
     }
 
-    /// Records a file operation with the specified metrics
     pub fn record_file_operation(&mut self, path: String, lines_added: u64, lines_removed: u64) {
         // Update file-specific metrics
         let file_metrics = self.files_changed.entry(path).or_default();
@@ -81,17 +69,14 @@ impl SessionMetrics {
             .map(|start| (Utc::now() - start).to_std().unwrap_or_default())
     }
 
-    /// Gets the number of unique files changed
     pub fn files_changed_count(&self) -> usize {
         self.files_changed.len()
     }
 
-    /// Gets the net change in lines across all files
     pub fn net_change(&self) -> i64 {
         self.total_lines_added as i64 - self.total_lines_removed as i64
     }
 
-    /// Resets all metrics to their initial state
     pub fn reset(&mut self) {
         *self = Self::new();
     }

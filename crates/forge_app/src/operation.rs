@@ -619,7 +619,7 @@ mod tests {
             },
             output: FsCreateOutput {
                 path: "/home/user/new_file.txt".to_string(),
-                original_content: None,
+                before: None,
                 warning: None,
             },
         };
@@ -647,7 +647,7 @@ mod tests {
             },
             output: FsCreateOutput {
                 path: "/home/user/existing_file.txt".to_string(),
-                original_content: Some("Old content".to_string()),
+                before: Some("Old content".to_string()),
                 warning: None,
             },
         };
@@ -1248,7 +1248,7 @@ mod tests {
             },
             output: FsCreateOutput {
                 path: "/home/user/file_with_warning.txt".to_string(),
-                original_content: None,
+                before: None,
                 warning: Some("File created in non-standard location".to_string()),
             },
         };
@@ -1367,8 +1367,9 @@ mod tests {
             },
             output: PatchOutput {
                 warning: None,
-                original_content: "Hello world\nThis is a test".to_string(),
-                modified_content: "Hello universe\nThis is a test".to_string(),
+                before: "Hello world\nThis is a test".to_string(),
+                after: "Hello universe
+This is a test".to_string(),
             },
         };
 
@@ -1396,8 +1397,10 @@ mod tests {
             },
             output: PatchOutput {
                 warning: Some("Large file modification".to_string()),
-                original_content: "line1\nline2".to_string(),
-                modified_content: "line1\nnew line\nline2".to_string(),
+                before: "line1\nline2".to_string(),
+                after: "line1
+new line
+line2".to_string(),
             },
         };
 
@@ -1421,9 +1424,8 @@ mod tests {
                 explanation: Some("Attempting to undo file with no changes".to_string()),
             },
             output: FsUndoOutput {
-                original_content: None,
-                content: "".to_string(),
-                was_removed: false,
+                before_undo: None,
+                after_undo: None,
             },
         };
 
@@ -1447,9 +1449,8 @@ mod tests {
                 explanation: Some("Undoing operation resulted in file creation".to_string()),
             },
             output: FsUndoOutput {
-                original_content: None,
-                content: "New file content\nLine 2\nLine 3".to_string(),
-                was_removed: true,
+                before_undo: None,
+                after_undo: Some("New file content\nLine 2\nLine 3".to_string()),
             },
         };
 
@@ -1473,11 +1474,10 @@ mod tests {
                 explanation: Some("Undoing operation resulted in file removal".to_string()),
             },
             output: FsUndoOutput {
-                original_content: Some(
+                before_undo: Some(
                     "Original file content\nThat was deleted\nDuring undo".to_string(),
                 ),
-                content: "".to_string(),
-                was_removed: false,
+                after_undo: None,
             },
         };
 
@@ -1501,9 +1501,10 @@ mod tests {
                 explanation: Some("Reverting changes to restore previous state".to_string()),
             },
             output: FsUndoOutput {
-                original_content: Some("Original content\nBefore changes".to_string()),
-                content: "Modified content\nAfter restoration".to_string(),
-                was_removed: false,
+                before_undo: Some("Original content
+Before changes".to_string()),
+                after_undo: Some("Modified content
+After restoration".to_string()),
             },
         };
 
@@ -1527,9 +1528,8 @@ mod tests {
                 explanation: Some("Reverting changes to test file".to_string()),
             },
             output: FsUndoOutput {
-                original_content: Some("ABC".to_string()),
-                content: "PQR".to_string(),
-                was_removed: false,
+                before_undo: Some("ABC".to_string()),
+                after_undo: Some("PQR".to_string()),
             },
         };
 
