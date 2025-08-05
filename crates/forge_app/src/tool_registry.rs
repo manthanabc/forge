@@ -139,7 +139,7 @@ impl<S> ToolRegistry<S> {
 
         if !agent_tools.contains(&tool_name.as_str())
             && *tool_name != ToolsDiscriminants::ForgeToolAttemptCompletion.name()
-            && *tool_name != ToolsDiscriminants::ForgeToolAttemptPartialCompletion.name()
+            && *tool_name != ToolsDiscriminants::ForgeToolPartialCompletion.name()
         {
             tracing::error!(tool_name = %tool_name, "No tool with name");
 

@@ -380,15 +380,11 @@ impl<S: AgentService> Orchestrator<S> {
         // Retrieve the number of requests allowed per tick.
         let max_requests_per_turn = self.conversation.max_requests_per_turn;
 
-        warn!("FUCKED CLONED");
-        let mut session_metrics = self.conversation.session_metrics.clone();
-
+        let mut metrics = self.conversation.metrics.clone();
         while !is_complete {
-            let mut tool_context = ToolCallContext::new(
-                self.conversation.tasks.clone(),
-                &mut session_metrics,
-            )
-            .sender(self.sender.clone());
+            let mut tool_context =
+                ToolCallContext::new(self.conversation.tasks.clone(), &mut metrics)
+                    .sender(self.sender.clone());
             // Set context for the current loop iteration
             self.conversation.context = Some(context.clone());
             self.services.update(self.conversation.clone()).await?;
@@ -457,17 +453,11 @@ impl<S: AgentService> Orchestrator<S> {
 
             debug!(agent_id = %agent.id, tool_call_count = tool_calls.len(), "Tool call count");
 
-            is_complete = tool_calls.iter().any(|call| {
-                let is_completion = Tools::is_completee(&call.name);
-                if is_completion {
-                    has_attempted_completion = true;
-                }
-                is_completion
-            });
-            is_complete = tool_calls.iter().any(|call| {
-                let is_completion = Tools::is_complete(&call.name);
-                is_completion
-            });
+            has_attempted_completion = tool_calls.iter().any(|call| Tools::is_complete(&call.name));
+
+            is_complete = tool_calls
+                .iter()
+                .any(|call| Tools::should_yeild(&call.name));
 
             if !is_complete && !has_no_tool_calls {
                 // If task is completed we would have already displayed a message so we can
@@ -617,13 +607,12 @@ impl<S: AgentService> Orchestrator<S> {
         }
 
         if has_attempted_completion {
-            warn!("GOTA");
-            let summary = SessionSummary::from(&session_metrics);
+            let summary = SessionSummary::from(&metrics);
             self.send(ChatResponse::ChatComplete(Some(summary))).await?;
         }
 
-        self.conversation.session_metrics = session_metrics;
-        
+        self.conversation.metrics = metrics;
+
         Ok(())
     }
 

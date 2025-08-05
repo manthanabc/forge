@@ -33,7 +33,7 @@ impl FormatContent for Operation {
             Operation::Shell { output: _ } => None,
             Operation::FollowUp { output: _ } => None,
             Operation::AttemptCompletion => None,
-            Operation::AttemptPartialCompletion => None,
+            Operation::PartialCompletion => None,
             Operation::TaskListAppend { _input: _, before, after }
             | Operation::TaskListAppendMultiple { _input: _, before, after }
             | Operation::TaskListUpdate { _input: _, before, after }

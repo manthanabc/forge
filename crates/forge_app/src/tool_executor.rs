@@ -123,8 +123,8 @@ impl<
             Tools::ForgeToolAttemptCompletion(_input) => {
                 crate::operation::Operation::AttemptCompletion
             }
-            Tools::ForgeToolAttemptPartialCompletion(_input) => {
-                crate::operation::Operation::AttemptPartialCompletion
+            Tools::ForgeToolPartialCompletion(_input) => {
+                crate::operation::Operation::PartialCompletion
             }
             Tools::ForgeToolTaskListAppend(input) => {
                 let before = tasks.clone();
@@ -188,6 +188,11 @@ impl<
             .to_create_temp(self.services.as_ref())
             .await?;
 
-        Ok(execution_result.into_tool_output(tool_name, truncation_path, &env, Some(&mut context.session_metrics)))
+        Ok(execution_result.into_tool_output(
+            tool_name,
+            truncation_path,
+            &env,
+            Some(&mut context.metrics),
+        ))
     }
 }

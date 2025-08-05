@@ -81,7 +81,7 @@ impl FormatContent for Tools {
             Tools::ForgeToolAttemptCompletion(input) => {
                 ContentFormat::Markdown(input.result.clone())
             }
-            Tools::ForgeToolAttemptPartialCompletion(input) => {
+            Tools::ForgeToolPartialCompletion(input) => {
                 ContentFormat::Markdown(input.result.clone())
             }
             Tools::ForgeToolTaskListAppend(_) => {

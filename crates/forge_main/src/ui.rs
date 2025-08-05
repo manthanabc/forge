@@ -837,26 +837,20 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
     async fn on_completion(&mut self, summary: Option<SessionSummary>) -> anyhow::Result<()> {
         self.spinner.stop(None)?;
 
-        if let Some(s) = summary {
-            self.writeln(TitleFormat::info("Session Summary"))?;
-            self.writeln(s)?;
-        }
-
         let should_start_new_chat = ForgeSelect::confirm("Do you want to start a new chat?")
             .with_default(true)
             .prompt()?;
 
         if should_start_new_chat.unwrap_or(false) {
+            // Show summary if conversation is over
+            if let Some(s) = summary {
+                self.writeln(TitleFormat::info("Session Summary"))?;
+                self.writeln(s)?;
+            }
             self.writeln(Info::from(&self.state))?;
             self.on_new().await?;
-        } else {
-            self.on_exit().await?;
         }
-        Ok(())
-    }
 
-    async fn on_exit(&mut self) -> anyhow::Result<()> {
-        // Add any necessary cleanup or exit logic here
         Ok(())
     }
 
