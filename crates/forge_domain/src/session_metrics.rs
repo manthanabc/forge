@@ -31,10 +31,11 @@ impl FileChangeMetrics {
     }
 }
 
-/// Aggregates session metrics including file changes, operations, and duration
+/// Aggregates conversation metrics including file changes, operations, and
+/// duration
 #[derive(Debug, Clone, Default, Setters, Serialize, Deserialize)]
 #[setters(into, strip_option)]
-pub struct SessionMetrics {
+pub struct Metrics {
     pub started_at: Option<DateTime<Utc>>,
     pub files_changed: HashMap<String, FileChangeMetrics>,
     pub total_lines_added: u64,
@@ -42,7 +43,7 @@ pub struct SessionMetrics {
     pub operations_count: u64,
 }
 
-impl SessionMetrics {
+impl Metrics {
     pub fn new() -> Self {
         Self::default()
     }
@@ -93,8 +94,8 @@ pub struct SessionSummary {
     pub operations: u64,
 }
 
-impl From<&SessionMetrics> for SessionSummary {
-    fn from(metrics: &SessionMetrics) -> Self {
+impl From<&Metrics> for SessionSummary {
+    fn from(metrics: &Metrics) -> Self {
         let duration = match metrics.duration() {
             Some(d) => {
                 let total_seconds = d.as_secs();
@@ -123,29 +124,30 @@ impl std::fmt::Display for SessionSummary {
         writeln!(f, "Files Changed: {}", self.files_changed)?;
         writeln!(f, "Lines Added: {}", self.lines_added)?;
         writeln!(f, "Lines Removed: {}", self.lines_removed)?;
-        
+
         let net_change_sign = if self.net_change >= 0 { "+" } else { "" };
-        writeln!(f, "Net Change: {}{} lines", net_change_sign, self.net_change)?;
+        writeln!(
+            f,
+            "Net Change: {}{} lines",
+            net_change_sign, self.net_change
+        )?;
         writeln!(f, "Operations: {}", self.operations)?;
-        
+
         Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use pretty_assertions::assert_eq;
+
+    use super::*;
 
     #[test]
     fn test_file_change_metrics_new() {
         let fixture = FileChangeMetrics::new();
         let actual = fixture;
-        let expected = FileChangeMetrics {
-            lines_added: 0,
-            lines_removed: 0,
-            operations_count: 0,
-        };
+        let expected = FileChangeMetrics { lines_added: 0, lines_removed: 0, operations_count: 0 };
         assert_eq!(actual.lines_added, expected.lines_added);
         assert_eq!(actual.lines_removed, expected.lines_removed);
         assert_eq!(actual.operations_count, expected.operations_count);
@@ -156,13 +158,9 @@ mod tests {
         let mut fixture = FileChangeMetrics::new();
         fixture.add_operation(10, 5);
         fixture.add_operation(3, 2);
-        
+
         let actual = fixture;
-        let expected = FileChangeMetrics {
-            lines_added: 13,
-            lines_removed: 7,
-            operations_count: 2,
-        };
+        let expected = FileChangeMetrics { lines_added: 13, lines_removed: 7, operations_count: 2 };
         assert_eq!(actual.lines_added, expected.lines_added);
         assert_eq!(actual.lines_removed, expected.lines_removed);
         assert_eq!(actual.operations_count, expected.operations_count);
@@ -172,17 +170,17 @@ mod tests {
     fn test_file_change_metrics_net_change() {
         let mut fixture = FileChangeMetrics::new();
         fixture.add_operation(10, 5);
-        
+
         let actual = fixture.net_change();
         let expected = 5;
         assert_eq!(actual, expected);
     }
 
     #[test]
-    fn test_session_metrics_new() {
-        let fixture = SessionMetrics::new();
+    fn test_metrics_new() {
+        let fixture = Metrics::new();
         let actual = fixture;
-        
+
         assert_eq!(actual.files_changed.len(), 0);
         assert_eq!(actual.total_lines_added, 0);
         assert_eq!(actual.total_lines_removed, 0);
@@ -190,19 +188,19 @@ mod tests {
     }
 
     #[test]
-    fn test_session_metrics_record_file_operation() {
-        let mut fixture = SessionMetrics::new();
+    fn test_metrics_record_file_operation() {
+        let mut fixture = Metrics::new();
         fixture.record_file_operation("file1.rs".to_string(), 10, 5);
         fixture.record_file_operation("file2.rs".to_string(), 3, 2);
         fixture.record_file_operation("file1.rs".to_string(), 5, 1);
-        
+
         let actual = fixture;
-        
+
         assert_eq!(actual.files_changed_count(), 2);
         assert_eq!(actual.total_lines_added, 18);
         assert_eq!(actual.total_lines_removed, 8);
         assert_eq!(actual.operations_count, 3);
-        
+
         let file1_metrics = actual.files_changed.get("file1.rs").unwrap();
         assert_eq!(file1_metrics.lines_added, 15);
         assert_eq!(file1_metrics.lines_removed, 6);
@@ -210,10 +208,10 @@ mod tests {
     }
 
     #[test]
-    fn test_session_metrics_net_change() {
-        let mut fixture = SessionMetrics::new();
+    fn test_metrics_net_change() {
+        let mut fixture = Metrics::new();
         fixture.record_file_operation("file1.rs".to_string(), 10, 5);
-        
+
         let actual = fixture.net_change();
         let expected = 5;
         assert_eq!(actual, expected);
@@ -221,13 +219,13 @@ mod tests {
 
     #[test]
     fn test_session_summary_from_metrics() {
-        let mut fixture = SessionMetrics::new();
+        let mut fixture = Metrics::new();
         fixture.start();
         fixture.record_file_operation("file1.rs".to_string(), 247, 89);
         fixture.record_file_operation("file2.rs".to_string(), 50, 20);
-        
+
         let actual = SessionSummary::from(&fixture);
-        
+
         assert_eq!(actual.files_changed, 2);
         assert_eq!(actual.lines_added, 297);
         assert_eq!(actual.lines_removed, 109);
@@ -245,7 +243,7 @@ mod tests {
             net_change: 158,
             operations: 23,
         };
-        
+
         let actual = format!("{}", fixture);
         let expected = "SESSION SUMMARY\nDuration: 15m 32s\nFiles Changed: 8\nLines Added: 247\nLines Removed: 89\nNet Change: +158 lines\nOperations: 23\n";
         assert_eq!(actual, expected);
@@ -261,7 +259,7 @@ mod tests {
             net_change: -25,
             operations: 5,
         };
-        
+
         let actual = format!("{}", fixture);
         let expected = "SESSION SUMMARY\nDuration: 5m 10s\nFiles Changed: 3\nLines Added: 50\nLines Removed: 75\nNet Change: -25 lines\nOperations: 5\n";
         assert_eq!(actual, expected);

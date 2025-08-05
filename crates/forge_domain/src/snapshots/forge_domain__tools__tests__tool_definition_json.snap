@@ -143,7 +143,7 @@ expression: tools
 }
 {
   "name": "forge_tool_fs_patch",
-  "description": "Modifies files with targeted line operations on matched patterns. Supports\n prepend, append, replace, replace_all, swap, delete\n operations. Ideal for precise changes to configs, code, or docs while\n preserving context. Not suitable for complex refactoring or modifying all\n pattern occurrences - use `forge_tool_fs_create` instead for complete\n rewrites and `forge_tool_fs_undo` for undoing the last operation. Fails if\n search pattern isn\'t found.",
+  "description": "Modifies files with targeted line operations on matched patterns. Supports\n prepend, append, replace, replace_all, swap, delete\n operations. Ideal for precise changes to configs, code, or docs while\n preserving context. Not suitable for complex refactoring or modifying all\n pattern occurrences - use `forge_tool_fs_create` instead for complete\n rewrites and `forge_tool_fs_undo` for undoing the last operation. Fails if\n search pattern isn\\'t found.",
   "input_schema": {
     "title": "FSPatch",
     "description": "Modifies files with targeted line operations on matched patterns. Supports prepend, append, replace, replace_all, swap, delete operations. Ideal for precise changes to configs, code, or docs while preserving context. Not suitable for complex refactoring or modifying all pattern occurrences - use `forge_tool_fs_create` instead for complete rewrites and `forge_tool_fs_undo` for undoing the last operation. Fails if search pattern isn't found.",
@@ -213,7 +213,7 @@ expression: tools
 }
 {
   "name": "forge_tool_process_shell",
-  "description": "Executes shell commands with safety measures using restricted bash (rbash).\n Prevents potentially harmful operations like absolute path execution and\n directory changes. Use for file system interaction, running utilities,\n installing packages, or executing build commands. For operations requiring\n unrestricted access, advise users to run forge CLI with '-u' flag. Returns\n complete output including stdout, stderr, and exit code for diagnostic\n purposes.",
+  "description": "Executes shell commands with safety measures using restricted bash (rbash).\n Prevents potentially harmful operations like absolute path execution and\n directory changes. Use for file system interaction, running utilities,\n installing packages, or executing build commands. For operations requiring\n unrestricted access, advise users to run forge CLI with \\'-u\\' flag. Returns\n complete output including stdout, stderr, and exit code for diagnostic\n purposes.",
   "input_schema": {
     "title": "Shell",
     "description": "Executes shell commands with safety measures using restricted bash (rbash). Prevents potentially harmful operations like absolute path execution and directory changes. Use for file system interaction, running utilities, installing packages, or executing build commands. For operations requiring unrestricted access, advise users to run forge CLI with '-u' flag. Returns complete output including stdout, stderr, and exit code for diagnostic purposes.",
@@ -329,10 +329,10 @@ expression: tools
 }
 {
   "name": "forge_tool_attempt_completion",
-  "description": "Use this tool ONLY when the entire task is fully completed, all sub-tasks are done, and no further actions are required from you. This signifies the final delivery of the requested work. The user may respond with feedback if they are not satisfied with the result, which you can use to make improvements and try again.\n IMPORTANT NOTE: Before using this tool, you MUST ensure that all tasks in the task list are marked as DONE. If any tasks are PENDING or IN_PROGRESS, you MUST NOT use this tool. Instead, use `forge_tool_attempt_partial_completion` to report progress.",
+  "description": "Use this tool ONLY when the entire task is fully completed, all sub-tasks are done, and no further actions are required from you. This signifies the final delivery of the requested work. The user may respond with feedback if they are not satisfied with the result, which you can use to make improvements and try again.\n IMPORTANT NOTE: Before using this tool, you MUST ensure that all tasks in the task list are marked as DONE. If any tasks are PENDING or IN_PROGRESS, or if you expect more input you MUST NOT use this tool. Instead, use `forge_tool_partial_completion` to report progress.",
   "input_schema": {
     "title": "AttemptCompletion",
-    "description": "Use this tool ONLY when the entire task is fully completed, all sub-tasks are done, and no further actions are required from you. This signifies the final delivery of the requested work. The user may respond with feedback if they are not satisfied with the result, which you can use to make improvements and try again. IMPORTANT NOTE: Before using this tool, you MUST ensure that all tasks in the task list are marked as DONE. If any tasks are PENDING or IN_PROGRESS, you MUST NOT use this tool. Instead, use `forge_tool_attempt_partial_completion` to report progress.",
+    "description": "Use this tool ONLY when the entire task is fully completed, all sub-tasks are done, and no further actions are required from you. This signifies the final delivery of the requested work. The user may respond with feedback if they are not satisfied with the result, which you can use to make improvements and try again. IMPORTANT NOTE: Before using this tool, you MUST ensure that all tasks in the task list are marked as DONE. If any tasks are PENDING or IN_PROGRESS, or if you expect more input you MUST NOT use this tool. Instead, use `forge_tool_partial_completion` to report progress.",
     "type": "object",
     "required": [
       "result"
@@ -346,10 +346,10 @@ expression: tools
   }
 }
 {
-  "name": "forge_tool_attempt_partial_completion",
+  "name": "forge_tool_partial_completion",
   "description": "Use this tool to provide a partial completion of the task. This is the primary tool to use when you have made progress but still have pending tasks, or when you require further input or confirmation from the user before fully completing the task. This tool is for reporting concrete, actionable partial results, not for general updates or open-ended questions.",
   "input_schema": {
-    "title": "AttemptPartialCompletion",
+    "title": "PartialCompletion",
     "description": "Use this tool to provide a partial completion of the task. This is the primary tool to use when you have made progress but still have pending tasks, or when you require further input or confirmation from the user before fully completing the task. This tool is for reporting concrete, actionable partial results, not for general updates or open-ended questions.",
     "type": "object",
     "required": [
@@ -416,7 +416,7 @@ expression: tools
 }
 {
   "name": "forge_tool_task_list_update",
-  "description": "Update the status of a specific task in the task list. Use this when a\n task\'s status changes (e.g., from Pending to InProgress, InProgress to Done,\n etc.). The task will remain in the list but with an updated status.",
+  "description": "Update the status of a specific task in the task list. Use this when a\n task\\'s status changes (e.g., from Pending to InProgress, InProgress to Done,\n etc.). The task will remain in the list but with an updated status.",
   "input_schema": {
     "title": "TaskListUpdate",
     "description": "Update the status of a specific task in the task list. Use this when a task's status changes (e.g., from Pending to InProgress, InProgress to Done, etc.). The task will remain in the list but with an updated status.",

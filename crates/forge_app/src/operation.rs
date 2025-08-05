@@ -1,12 +1,12 @@
-
-use forge_display::DiffFormat;
+use std::cmp::min;
 use std::path::{Path, PathBuf};
-use derive_setters::Setters;
 
+use console::strip_ansi_codes;
+use derive_setters::Setters;
+use forge_display::DiffFormat;
 use forge_domain::{
-    Environment, FSPatch, FSRead, FSRemove, FSSearch, FSUndo, FSWrite, NetFetch, SessionMetrics,
-    TaskList, TaskListAppend, TaskListAppendMultiple, TaskListClear, TaskListList, TaskListUpdate,
-    ToolName,
+    Environment, FSPatch, FSRead, FSRemove, FSSearch, FSUndo, FSWrite, Metrics, NetFetch, TaskList,
+    TaskListAppend, TaskListAppendMultiple, TaskListClear, TaskListList, TaskListUpdate, ToolName,
 };
 use forge_template::Element;
 
@@ -14,9 +14,10 @@ use crate::truncation::{
     StreamElement, create_temp_file, truncate_fetch_content, truncate_search_output,
     truncate_shell_output,
 };
+use crate::utils::format_display_path;
 use crate::{
     Content, EnvironmentService, FsCreateOutput, FsCreateService, FsUndoOutput, HttpResponse,
-    PatchOutput, ReadOutput, ResponseContext, SearchResult, ShellOutput
+    PatchOutput, ReadOutput, ResponseContext, SearchResult, ShellOutput,
 };
 
 struct FileOperationStats {
@@ -26,12 +27,16 @@ struct FileOperationStats {
     lines_removed: u64,
 }
 
-fn file_change_stats(operation: FileOperationStats, session_metrics: Option<&mut SessionMetrics>) {
+fn file_change_stats(operation: FileOperationStats, metrics: Option<&mut Metrics>) {
     tracing::info!(path = %operation.path, type = %operation.tool_name, lines_added = %operation.lines_added, lines_removed = %operation.lines_removed, "File change stats");
-    
-    // Record metrics in session if available
-    if let Some(metrics) = session_metrics {
-        metrics.record_file_operation(operation.path, operation.lines_added, operation.lines_removed);
+
+    // Record metrics if available
+    if let Some(metrics) = metrics {
+        metrics.record_file_operation(
+            operation.path,
+            operation.lines_added,
+            operation.lines_removed,
+        );
     }
 }
 
@@ -149,7 +154,7 @@ impl Operation {
         tool_name: ToolName,
         content_files: TempContentFiles,
         env: &Environment,
-        session_metrics: Option<&mut SessionMetrics>,
+        metrics: Option<&mut Metrics>,
     ) -> forge_domain::ToolOutput {
         match self {
             Operation::FsRead { input, output } => match &output.content {
@@ -167,23 +172,28 @@ impl Operation {
                 }
             },
             Operation::FsCreate { input, output } => {
-                let elm = if let Some(before_content) = &output.before {
-                    let diff_result = DiffFormat::format(before_content, &input.content);
-                    file_change_stats(FileOperationStats {
-                        path: input.path.clone(),
-                        tool_name,
-                        lines_added: diff_result.lines_added(),
-                        lines_removed: diff_result.lines_removed(),
-                    }, session_metrics);
+                let mut elm = if let Some(before) = output.before.as_ref() {
+                    let diff_result = DiffFormat::format(before, &input.content);
+                    let diff = console::strip_ansi_codes(diff_result.diff()).to_string();
+                    // Log file change stats
+                    file_change_stats(
+                        FileOperationStats {
+                            path: input.path.clone(),
+                            tool_name,
+                            lines_added: diff_result.lines_added(),
+                            lines_removed: diff_result.lines_removed(),
+                        },
+                        metrics,
+                    );
 
-                    Element::new("file_overwritten").append(Element::new("file_diff").cdata(diff_result.diff().to_string()))
+                    Element::new("file_overwritten").append(Element::new("file_diff").cdata(diff))
                 } else {
                     Element::new("file_created")
                 };
 
-                let mut elm =
-                    elm.attr("path", input.path)
-                        .attr("total_lines", input.content.lines().count());
+                elm = elm
+                    .attr("path", input.path)
+                    .attr("total_lines", input.content.lines().count());
 
                 if let Some(warning) = output.warning {
                     elm = elm.append(Element::new("warning").text(warning));
@@ -191,89 +201,122 @@ impl Operation {
 
                 forge_domain::ToolOutput::text(elm)
             }
-            Operation::FsRemove {input} => {
-                let elm = Element::new("file_removed").attr("path", input.path);
-                forge_domain::ToolOutput::text(elm)
+            Operation::FsRemove { input } => {
+                let display_path = format_display_path(Path::new(&input.path), env.cwd.as_path());
+                let elem = Element::new("file_removed")
+                    .attr("path", display_path)
+                    .attr("status", "completed");
+                forge_domain::ToolOutput::text(elem)
             }
+
+            Operation::FsSearch { input, output } => match output {
+                Some(out) => {
+                    let max_lines = min(
+                        env.max_search_lines,
+                        input.max_search_lines.unwrap_or(i32::MAX) as u64,
+                    );
+                    let start_index = input.start_index.unwrap_or(1);
+                    let start_index = if start_index > 0 { start_index - 1 } else { 0 };
+                    let search_dir = Path::new(&input.path);
+                    let truncated_output = truncate_search_output(
+                        &out.matches,
+                        start_index as u64,
+                        max_lines,
+                        search_dir,
+                    );
+
+                    let mut elm = Element::new("search_results")
+                        .attr("path", &input.path)
+                        .attr("total_lines", truncated_output.total_lines)
+                        .attr(
+                            "display_lines",
+                            format!(
+                                "{}-{}",
+                                truncated_output.start_line, truncated_output.end_line
+                            ),
+                        );
+
+                    elm = elm.attr_if_some("regex", input.regex);
+                    elm = elm.attr_if_some("file_pattern", input.file_pattern);
+
+                    elm = elm.cdata(truncated_output.output.trim());
+                    forge_domain::ToolOutput::text(elm)
+                }
+                None => {
+                    let mut elm = Element::new("search_results").attr("path", &input.path);
+                    elm = elm.attr_if_some("regex", input.regex);
+                    elm = elm.attr_if_some("file_pattern", input.file_pattern);
+
+                    forge_domain::ToolOutput::text(elm)
+                }
+            },
             Operation::FsPatch { input, output } => {
-                let diff = DiffFormat::format(
-                    output.before.as_str(),
-                    output.after.as_str(),
+                let diff_result = DiffFormat::format(&output.before, &output.after);
+                let diff = console::strip_ansi_codes(diff_result.diff()).to_string();
+                let mut elm = Element::new("file_diff")
+                    .attr("path", &input.path)
+                    .attr("total_lines", output.after.lines().count())
+                    .cdata(diff);
+
+                if let Some(warning) = &output.warning {
+                    elm = elm.append(Element::new("warning").text(warning));
+                }
+
+                file_change_stats(
+                    FileOperationStats {
+                        path: input.path.clone(),
+                        tool_name,
+                        lines_added: diff_result.lines_added(),
+                        lines_removed: diff_result.lines_removed(),
+                    },
+                    metrics,
                 );
 
-                file_change_stats(FileOperationStats {
-                    path: input.path.clone(),
-                    tool_name,
-                    lines_added: diff.lines_added(),
-                    lines_removed: diff.lines_removed(),
-                }, session_metrics);
-
-                let elm = Element::new("file_patched")
-                    .attr("path", input.path)
-                    .append(Element::new("file_diff").cdata(diff.diff().to_string()));
                 forge_domain::ToolOutput::text(elm)
             }
             Operation::FsUndo { input, output } => {
-                let (elm, _diff) = if let (Some(before_undo), Some(after_undo)) = (output.before_undo.as_deref(), output.after_undo.as_deref()) {
-                    let diff_result = DiffFormat::format(before_undo, after_undo);
-                    file_change_stats(FileOperationStats {
-                        path: input.path.clone(),
-                        tool_name,
-                        lines_added: diff_result.lines_added(),
-                        lines_removed: diff_result.lines_removed(),
-                    }, session_metrics);
-
-                    let elm = Element::new("file_undo")
-                        .attr("path", input.path)
-                        .append(Element::new("file_diff").cdata(diff_result.diff().to_string()));
-                    (elm, diff_result)
-                } else if output.before_undo.is_some() {
-                    // File was removed, now restored
-                    let diff_result = DiffFormat::format(output.before_undo.as_deref().unwrap_or_default(), "");
-                    file_change_stats(FileOperationStats {
-                        path: input.path.clone(),
-                        tool_name,
-                        lines_added: diff_result.lines_added(),
-                        lines_removed: diff_result.lines_removed(),
-                    }, session_metrics);
-                    (
-                        Element::new("file_restored").attr("path", input.path.clone()),
-                        diff_result,
-                    )
-                } else {
-                    // File was created, now removed
-                    let diff_result = DiffFormat::format("", output.after_undo.as_deref().unwrap_or_default());
-                    file_change_stats(FileOperationStats {
-                        path: input.path.clone(),
-                        tool_name,
-                        lines_added: diff_result.lines_added(),
-                        lines_removed: diff_result.lines_removed(),
-                    }, session_metrics);
-                    (
-                        Element::new("file_removed").attr("path", input.path.clone()),
-                        diff_result,
-                    )
-                };
-                forge_domain::ToolOutput::text(elm)
-            }
-            Operation::FsSearch { input, output } => {
-                if let Some(output) = output {
-                    let truncated_output =
-                        truncate_search_output(&output.matches, 0, env.max_search_lines, Path::new(&input.path));
-                    let mut elm = Element::new("search_results")
-                        .attr("total_matches", output.matches.len())
-                        .attr("results_returned", truncated_output.output.lines().count());
-
-                    for m in truncated_output.output.lines() {
-                        elm = elm.append(
-                            Element::new("match")
-                                .cdata(m),
-                        );
+                match (&output.before_undo, &output.after_undo) {
+                    (None, None) => {
+                        let elm = Element::new("file_undo")
+                            .attr("path", input.path)
+                            .attr("status", "no_changes");
+                        forge_domain::ToolOutput::text(elm)
                     }
-                    forge_domain::ToolOutput::text(elm)
-                } else {
-                    let elm = Element::new("no_matches_found").attr("path", input.path);
-                    forge_domain::ToolOutput::text(elm)
+                    (None, Some(after)) => {
+                        let elm = Element::new("file_undo")
+                            .attr("path", input.path)
+                            .attr("status", "created")
+                            .attr("total_lines", after.lines().count())
+                            .cdata(after);
+                        forge_domain::ToolOutput::text(elm)
+                    }
+                    (Some(before), None) => {
+                        let elm = Element::new("file_undo")
+                            .attr("path", input.path)
+                            .attr("status", "removed")
+                            .attr("total_lines", before.lines().count())
+                            .cdata(before);
+                        forge_domain::ToolOutput::text(elm)
+                    }
+                    (Some(after), Some(before)) => {
+                        let diff = DiffFormat::format(before, after);
+                        file_change_stats(
+                            FileOperationStats {
+                                path: input.path.clone(),
+                                tool_name,
+                                lines_added: diff.lines_added(),
+                                lines_removed: diff.lines_removed(),
+                            },
+                            metrics,
+                        );
+
+                        let elm = Element::new("file_undo")
+                            .attr("path", input.path)
+                            .attr("status", "restored")
+                            .cdata(strip_ansi_codes(diff.diff()));
+
+                        forge_domain::ToolOutput::text(elm)
+                    }
                 }
             }
             Operation::NetFetch { input, output } => {
@@ -350,10 +393,11 @@ impl Operation {
                 Element::new("success")
                     .text("[Task was completed successfully. Now wait for user feedback]"),
             ),
-            Operation::PartialCompletion => forge_domain::ToolOutput::text(
-                Element::new("partial_success")
-                    .text("[Task was partially completed. Waiting for further instructions or feedback]"),
-            ),
+            Operation::PartialCompletion => {
+                forge_domain::ToolOutput::text(Element::new("partial_success").text(
+                    "[Task was partially completed. Waiting for further instructions or feedback]",
+                ))
+            }
             Operation::TaskListAppend { _input: _, before: _, after }
             | Operation::TaskListAppendMultiple { _input: _, before: _, after }
             | Operation::TaskListUpdate { _input: _, before: _, after }
@@ -602,8 +646,12 @@ mod tests {
         let truncation_path =
             TempContentFiles::default().stdout(PathBuf::from("/tmp/truncated_content.txt"));
 
-        let actual =
-            fixture.into_tool_output(ToolName::new("forge_tool_fs_read"), truncation_path, &env, None);
+        let actual = fixture.into_tool_output(
+            ToolName::new("forge_tool_fs_read"),
+            truncation_path,
+            &env,
+            None,
+        );
 
         insta::assert_snapshot!(to_value(actual));
     }
@@ -1368,8 +1416,7 @@ mod tests {
             output: PatchOutput {
                 warning: None,
                 before: "Hello world\nThis is a test".to_string(),
-                after: "Hello universe
-This is a test".to_string(),
+                after: "Hello universe\nThis is a test".to_string(),
             },
         };
 
@@ -1398,9 +1445,7 @@ This is a test".to_string(),
             output: PatchOutput {
                 warning: Some("Large file modification".to_string()),
                 before: "line1\nline2".to_string(),
-                after: "line1
-new line
-line2".to_string(),
+                after: "line1\nnew line\nline2".to_string(),
             },
         };
 
@@ -1423,10 +1468,7 @@ line2".to_string(),
                 path: "/home/user/unchanged_file.txt".to_string(),
                 explanation: Some("Attempting to undo file with no changes".to_string()),
             },
-            output: FsUndoOutput {
-                before_undo: None,
-                after_undo: None,
-            },
+            output: FsUndoOutput { before_undo: None, after_undo: None },
         };
 
         let env = fixture_environment();
@@ -1501,10 +1543,8 @@ line2".to_string(),
                 explanation: Some("Reverting changes to restore previous state".to_string()),
             },
             output: FsUndoOutput {
-                before_undo: Some("Original content
-Before changes".to_string()),
-                after_undo: Some("Modified content
-After restoration".to_string()),
+                before_undo: Some("Original content\nBefore changes".to_string()),
+                after_undo: Some("Modified content\nAfter restoration".to_string()),
             },
         };
 
@@ -1599,8 +1639,12 @@ After restoration".to_string()),
         let truncation_path =
             TempContentFiles::default().stdout(PathBuf::from("/tmp/forge_fetch_abc123.txt"));
 
-        let actual =
-            fixture.into_tool_output(ToolName::new("forge_tool_net_fetch"), truncation_path, &env, None);
+        let actual = fixture.into_tool_output(
+            ToolName::new("forge_tool_net_fetch"),
+            truncation_path,
+            &env,
+            None,
+        );
 
         // make sure that the content is truncated
         assert!(

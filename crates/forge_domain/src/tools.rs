@@ -372,8 +372,14 @@ pub struct Followup {
     pub explanation: Option<String>,
 }
 
-/// Use this tool ONLY when the entire task is fully completed, all sub-tasks are done, and no further actions are required from you. This signifies the final delivery of the requested work. The user may respond with feedback if they are not satisfied with the result, which you can use to make improvements and try again.
-/// IMPORTANT NOTE: Before using this tool, you MUST ensure that all tasks in the task list are marked as DONE. If any tasks are PENDING or IN_PROGRESS, or if you expect more input you MUST NOT use this tool. Instead, use `forge_tool_partial_completion` to report progress.
+/// Use this tool ONLY when the entire task is fully completed, all sub-tasks
+/// are done, and no further actions are required from you. This signifies the
+/// final delivery of the requested work. The user may respond with feedback if
+/// they are not satisfied with the result, which you can use to make
+/// improvements and try again. IMPORTANT NOTE: Before using this tool, you MUST
+/// ensure that all tasks in the task list are marked as DONE. If any tasks are
+/// PENDING or IN_PROGRESS, or if you expect more input you MUST NOT use this
+/// tool. Instead, use `forge_tool_partial_completion` to report progress.
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
 pub struct AttemptCompletion {
     /// The result of the task. Formulate this result in a way that is final and
@@ -382,14 +388,17 @@ pub struct AttemptCompletion {
     pub result: String,
 }
 
-/// Use this tool to provide a partial completion of the task. This is the primary tool to use when you have made progress but still have pending tasks, or when you require further input or confirmation from the user before fully completing the task. This tool is for reporting concrete, actionable partial results, not for general updates or open-ended questions.
+/// Use this tool to provide a partial completion of the task. This is the
+/// primary tool to use when you have made progress but still have pending
+/// tasks, or when you require further input or confirmation from the user
+/// before fully completing the task. This tool is for reporting concrete,
+/// actionable partial results, not for general updates or open-ended questions.
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
 pub struct PartialCompletion {
     /// The partial result of the task. Formulate this result in a way that is
     /// clear and concise, indicating what has been achieved and what remains.
     pub result: String,
 }
-
 
 /// Add a new task to the end of the task list. Tasks are stored in conversation
 /// state and persist across agent interactions. Use this tool to add individual
@@ -641,20 +650,18 @@ impl Tools {
     pub fn contains(tool_name: &ToolName) -> bool {
         FORGE_TOOLS.contains(tool_name)
     }
-    pub fn is_complete(tool_name: &ToolName) -> bool {
+    pub fn should_yeild(tool_name: &ToolName) -> bool {
         // Tools that convey that the execution should yield
         [
             ToolsDiscriminants::ForgeToolAttemptCompletion,
             ToolsDiscriminants::ForgeToolPartialCompletion,
         ]
-            .iter()
-            .any(|v| v.to_string().to_case(Case::Snake).eq(tool_name.as_str()))
+        .iter()
+        .any(|v| v.to_string().to_case(Case::Snake).eq(tool_name.as_str()))
     }
-    pub fn is_completee(tool_name: &ToolName) -> bool {
-        // Tools that convey that the execution should yield
-        [
-            ToolsDiscriminants::ForgeToolAttemptCompletion
-        ]
+    pub fn is_complete(tool_name: &ToolName) -> bool {
+        // Tools that convey that conversation might be completed
+        [ToolsDiscriminants::ForgeToolAttemptCompletion]
             .iter()
             .any(|v| v.to_string().to_case(Case::Snake).eq(tool_name.as_str()))
     }
