@@ -155,9 +155,6 @@ where
             let mut scrollbar_state = ScrollbarState::new(items_len).position(selected_index);
 
             Scrollbar::new(ScrollbarOrientation::VerticalRight)
-                .symbols(scrollbar::Set { ..scrollbar::VERTICAL })
-                .style(Style::default().fg(Color::DarkGray))
-                .thumb_style(Style::default().dark_gray())
                 .render(scrollbar_area, buf, &mut scrollbar_state);
         }
 
