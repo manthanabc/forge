@@ -104,6 +104,7 @@ mod tests {
     use super::*;
     use crate::{NamedTool, ToolDescription, ToolName, Tools};
 
+    #[allow(dead_code)]
     #[derive(Default)]
     pub struct MangoTool;
 

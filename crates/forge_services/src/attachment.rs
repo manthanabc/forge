@@ -299,6 +299,7 @@ pub mod tests {
     }
 
     #[derive(Debug)]
+    #[allow(dead_code)]
     pub struct MockSnapService;
 
     #[async_trait::async_trait]
