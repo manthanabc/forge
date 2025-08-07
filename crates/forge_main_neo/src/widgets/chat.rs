@@ -36,14 +36,21 @@ impl StatefulWidget for ChatWidget {
         );
 
         let [messages_area, user_area, status_area] = chat_layout.areas(area);
-
+        let forge_title = Span::styled(
+            " Messages ",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        );
         // Messages area block
         let message_block = if state.menu_visible {
             Block::bordered()
                 .borders(ratatui::widgets::Borders::ALL - ratatui::widgets::Borders::BOTTOM)
         } else {
             Block::bordered()
-        };
+        }
+        .padding(Padding::new(1, 1, 1, 1))
+        .title(forge_title);
 
         // Render welcome widget if no messages, otherwise render message list
         if state.messages.is_empty() {
@@ -76,7 +83,7 @@ impl StatefulWidget for ChatWidget {
         );
         // User input area block
         let user_block = Block::bordered()
-            .padding(Padding::new(0, 0, 0, 1))
+            .padding(Padding::new(1, 0, 0, 1))
             .border_style(Style::default().dark_gray())
             .border_set(if state.menu_visible {
                 border::Set {
