@@ -297,6 +297,7 @@ pub mod tests {
         }
     }
 
+    #[allow(dead_code)]
     #[derive(Debug)]
     pub struct MockSnapService;
 
