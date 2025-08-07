@@ -24,6 +24,7 @@ impl<T: Into<MenuItem>> MenuWidget<T> {
                 top_left: line::VERTICAL_RIGHT,
                 ..border::PLAIN
             })
+            .border_type(BorderType::Rounded)
             .title_bottom(" ↑/↓ Move • ⏎ Run • [ESC] Cancel ")
             .title_style(Style::default().fg(Color::DarkGray))
             .border_style(Style::default().fg(Color::DarkGray))

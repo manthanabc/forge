@@ -2,7 +2,7 @@ use ansi_to_tui::IntoText;
 use color_eyre::owo_colors::OwoColorize;
 use forge_api::ChatResponse;
 use ratatui::layout::Size;
-use ratatui::prelude::Widget;
+use ratatui::prelude::{Widget, Rect, Buffer};
 use ratatui::style::{Style, Stylize};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, StatefulWidget, Wrap};
@@ -17,63 +17,75 @@ pub struct MessageList;
 fn messages_to_lines(messages: &[Message]) -> Vec<Line<'_>> {
     messages
         .iter()
-        .flat_map(|message| match message {
-            Message::User(content) => vec![Line::from(vec![
-                Span::styled("❯ ", Style::default().green()),
-                Span::styled(content, Style::default().cyan().bold()),
-            ])]
-            .into_iter(),
-            Message::Assistant(response) => match response {
-                ChatResponse::Text { text, is_complete, is_md } => {
-                    if *is_complete {
-                        if *is_md {
-                            let rendered_text = forge_display::MarkdownFormat::new().render(text);
-                            match rendered_text.into_text() {
-                                Ok(text) => text.lines.into_iter(),
-                                Err(_) => vec![Line::raw(rendered_text)].into_iter(),
+        .flat_map(|message| {
+            match message {
+                Message::User(content) => vec![Line::from(vec![
+                    Span::styled("❯ ", Style::default().green()),
+                    Span::styled(content, Style::default().cyan().bold()),
+                ])],
+                Message::Assistant(response) => {
+                    let mut lines: Vec<Line> = match response {
+                        ChatResponse::Text { text, is_complete, is_md } => {
+                            if *is_complete {
+                                if *is_md {
+                                    let rendered_text = forge_display::MarkdownFormat::new().render(text);
+                                    match rendered_text.into_text() {
+                                        Ok(text) => text.lines,
+                                        Err(_) => vec![Line::raw(rendered_text)],
+                                    }
+                                } else {
+                                    match text.clone().into_text() {
+                                        Ok(text) => text.lines,
+                                        Err(_) => vec![Line::raw(text.clone())],
+                                    }
+                                }
+                            } else {
+                                vec![]
                             }
-                        } else {
-                            match text.clone().into_text() {
-                                Ok(text) => text.lines.into_iter(),
-                                Err(_) => vec![Line::raw(text.clone())].into_iter(),
+                        }
+                        ChatResponse::ToolCallStart(_) => vec![],
+                        ChatResponse::ToolCallEnd(_) => vec![],
+                        ChatResponse::Usage(_) => vec![],
+                        ChatResponse::Interrupt { reason: _ } => {
+                            todo!()
+                        }
+                        ChatResponse::Reasoning { content } => {
+                            if !content.trim().is_empty() {
+                                let dimmed_content = content.dimmed().to_string();
+                                match dimmed_content.into_text() {
+                                    Ok(text) => text.lines,
+                                    Err(_) => vec![Line::raw(dimmed_content)],
+                                }
+                            } else {
+                                vec![]
                             }
                         }
-                    } else {
-                        vec![].into_iter()
-                    }
-                }
-                ChatResponse::ToolCallStart(_) => vec![].into_iter(),
-                ChatResponse::ToolCallEnd(_) => vec![].into_iter(),
-                ChatResponse::Usage(_) => vec![].into_iter(),
-                ChatResponse::Interrupt { reason: _ } => {
-                    todo!()
-                }
-                ChatResponse::Reasoning { content } => {
-                    if !content.trim().is_empty() {
-                        let dimmed_content = content.dimmed().to_string();
-                        match dimmed_content.into_text() {
-                            Ok(text) => text.lines.into_iter(),
-                            Err(_) => vec![Line::raw(dimmed_content)].into_iter(),
+                        ChatResponse::Summary { content } => {
+                            if !content.trim().is_empty() {
+                                let rendered_text = forge_display::MarkdownFormat::new().render(content);
+                                match rendered_text.into_text() {
+                                    Ok(text) => text.lines,
+                                    Err(_) => vec![],
+                                }
+                            } else {
+                                vec![]
+                            }
                         }
-                    } else {
-                        vec![].into_iter()
-                    }
-                }
-                ChatResponse::Summary { content } => {
-                    if !content.trim().is_empty() {
-                        let rendered_text = forge_display::MarkdownFormat::new().render(content);
-                        match rendered_text.into_text() {
-                            Ok(text) => text.lines.into_iter(),
-                            Err(_) => vec![Line::raw(rendered_text)].into_iter(),
+                        ChatResponse::RetryAttempt { cause: _, duration: _ } => {
+                            todo!()
                         }
-                    } else {
-                        vec![].into_iter()
-                    }
+                    };
+
+                    // // Add prefix
+                    // if let Some(first_line) = lines.first_mut() {
+                    //     first_line
+                    //         .spans
+                    //         .insert(0, Span::styled("Assistant: ", Style::default().dark_gray()));
+                    // }
+
+                    lines
                 }
-                ChatResponse::RetryAttempt { cause: _, duration: _ } => {
-                    todo!()
-                }
-            },
+            }
         })
         .collect()
 }
@@ -82,8 +94,8 @@ impl StatefulWidget for MessageList {
     type State = State;
     fn render(
         self,
-        area: ratatui::prelude::Rect,
-        buf: &mut ratatui::prelude::Buffer,
+        area: Rect,
+        buf: &mut Buffer,
         state: &mut State,
     ) where
         Self: Sized,
