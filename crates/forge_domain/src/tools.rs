@@ -372,14 +372,18 @@ pub struct Followup {
     pub explanation: Option<String>,
 }
 
-/// Use this tool ONLY when the entire task is fully completed, all sub-tasks
-/// are done, and no further actions are required from you. This signifies the
-/// final delivery of the requested work. The user may respond with feedback if
-/// they are not satisfied with the result, which you can use to make
-/// improvements and try again. IMPORTANT NOTE: Before using this tool, you MUST
-/// ensure that all tasks in the task list are marked as DONE. If any tasks are
-/// PENDING or IN_PROGRESS, or if you expect more input you MUST NOT use this
-/// tool. Instead, use `forge_tool_partial_completion` to report progress.
+/// Use this tool ONLY when the entire task is fully completed,
+/// all sub-tasks are done, and no further actions are required from you.
+/// Using this tool signifies the final delivery of the requested work.
+///
+/// IMPORTANT NOTE: This tool CANNOT be used if any tasks are PENDING or
+/// IN_PROGRESS, or if you expect more input from the user.
+/// Failure to do so will result in an incomplete or incorrect final answer.
+/// Before using this tool, you
+/// must ask yourself in <forge_thinking></forge_thinking> tags if you've
+/// confirmed from the user that any previous tool uses were successful.
+/// If you need to report partial progress or ask a question,
+/// you MUST use the `forge_tool_partial_completion` tool instead.
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
 pub struct AttemptCompletion {
     /// The result of the task. Formulate this result in a way that is final and
@@ -762,14 +766,14 @@ mod tests {
 
     #[test]
     fn test_tool_deser_failure() {
-        let tool_call = ToolCallFull::new("forge_tool_fs_create".into());
+        let tool_call = ToolCallFull::new("forge_tool_fs_create");
         let result = Tools::try_from(tool_call);
         insta::assert_snapshot!(result.unwrap_err().to_string());
     }
 
     #[test]
     fn test_correct_deser() {
-        let tool_call = ToolCallFull::new("forge_tool_fs_create".into()).arguments(json!({
+        let tool_call = ToolCallFull::new("forge_tool_fs_create").arguments(json!({
             "path": "/some/path/foo.txt",
             "content": "Hello, World!",
         }));

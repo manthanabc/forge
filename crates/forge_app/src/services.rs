@@ -1,16 +1,15 @@
 use std::path::{Path, PathBuf};
-use std::pin::Pin;
 
 use bytes::Bytes;
 use forge_domain::{
-    Attachment, ChatCompletionMessage, CommandOutput, Context, Conversation, ConversationId,
+    Agent, Attachment, ChatCompletionMessage, CommandOutput, Context, Conversation, ConversationId,
     Environment, File, McpConfig, Model, ModelId, PatchOperation, Provider, ResultStream, Scope,
     ToolCallFull, ToolDefinition, ToolOutput, Workflow,
 };
-use futures::Stream;
 use merge::Merge;
 use reqwest::Response;
 use reqwest::header::HeaderMap;
+use reqwest_eventsource::EventSource;
 use url::Url;
 
 use crate::user::{User, UserUsage};
@@ -300,6 +299,12 @@ pub trait ProviderRegistry: Send + Sync {
     async fn get_provider(&self, config: AppConfig) -> anyhow::Result<Provider>;
 }
 
+#[async_trait::async_trait]
+pub trait AgentLoaderService: Send + Sync {
+    /// Load all agent definitions from the forge/agent directory
+    async fn load_agents(&self) -> anyhow::Result<Vec<Agent>>;
+}
+
 /// Core app trait providing access to services and repositories.
 /// This trait follows clean architecture principles for dependency management
 /// and service/repository composition.
@@ -325,6 +330,7 @@ pub trait Services: Send + Sync + 'static + Clone {
     type AuthService: AuthService;
     type AppConfigService: AppConfigService;
     type ProviderRegistry: ProviderRegistry;
+    type AgentLoaderService: AgentLoaderService;
 
     fn provider_service(&self) -> &Self::ProviderService;
     fn conversation_service(&self) -> &Self::ConversationService;
@@ -347,6 +353,7 @@ pub trait Services: Send + Sync + 'static + Clone {
     fn auth_service(&self) -> &Self::AuthService;
     fn app_config_service(&self) -> &Self::AppConfigService;
     fn provider_registry(&self) -> &Self::ProviderRegistry;
+    fn agent_loader_service(&self) -> &Self::AgentLoaderService;
 }
 
 #[async_trait::async_trait]
@@ -613,23 +620,6 @@ impl<I: Services> AuthService for I {
     }
 }
 
-/// Represents a server-sent event
-#[derive(Debug, Clone)]
-pub struct ServerSentEvent {
-    pub event_type: Option<String>,
-    pub data: String,
-    pub id: Option<String>,
-}
-
-/// Event stream states
-#[derive(Debug)]
-pub enum EventStreamState {
-    Open,
-    Message(ServerSentEvent),
-    Done,
-    Error(anyhow::Error),
-}
-
 /// HTTP service trait for making HTTP requests
 #[async_trait::async_trait]
 pub trait HttpClientService: Send + Sync + 'static {
@@ -643,5 +633,12 @@ pub trait HttpClientService: Send + Sync + 'static {
         url: &Url,
         headers: Option<HeaderMap>,
         body: Bytes,
-    ) -> anyhow::Result<Pin<Box<dyn Stream<Item = anyhow::Result<ServerSentEvent>> + Send>>>;
+    ) -> anyhow::Result<EventSource>;
+}
+
+#[async_trait::async_trait]
+impl<I: Services> AgentLoaderService for I {
+    async fn load_agents(&self) -> anyhow::Result<Vec<Agent>> {
+        self.agent_loader_service().load_agents().await
+    }
 }
