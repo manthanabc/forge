@@ -3,9 +3,8 @@ use ratatui::layout::{Alignment, Constraint, Direction, Layout};
 use ratatui::style::{Color, Modifier, Style, Stylize};
 use ratatui::symbols::{border, line};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Padding, StatefulWidget, Widget};
+use ratatui::widgets::{Block, Padding, StatefulWidget, Widget, BorderType};
 use strum::IntoEnumIterator;
-use ratatui::widgets::BorderType;
 
 use crate::domain::{EditorStateExt, SlashCommand, State};
 use crate::widgets::menu::MenuWidget;
@@ -37,25 +36,9 @@ impl StatefulWidget for ChatWidget {
         );
 
         let [messages_area, user_area, status_area] = chat_layout.areas(area);
-        let forge_title = Span::styled(
-            " Messages ",
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        );
         // Messages area block
-        let message_block = if state.menu_visible {
-            Block::bordered()
-                .borders(ratatui::widgets::Borders::ALL - ratatui::widgets::Borders::BOTTOM)
-                .border_type(BorderType::Rounded)
-                .border_style(Style::default().dark_gray())
-        } else {
-            Block::bordered()
-                .border_type(BorderType::Rounded)
-                .border_style(Style::default().dark_gray())
-        }
-        .padding(Padding::new(1, 1, 1, 1))
-        .title(forge_title);
+        let message_block = Block::default()
+        .padding(Padding::new(1, 1, 1, 1));
 
         // Render welcome widget if no messages, otherwise render message list
         if state.messages.is_empty() {
@@ -114,6 +97,81 @@ impl StatefulWidget for ChatWidget {
 
         // Render blocks
         message_block.render(messages_area, buf);
+        user_block.clone().render(user_area, buf);
+
+        // Create chat layout with messages area at top and user input area at bottom
+        let chat_layout = Layout::new(
+            Direction::Vertical,
+            [Constraint::Fill(1), Constraint::Max(5), Constraint::Max(1)],
+        );
+
+        let [messages_area, user_area, status_area] = chat_layout.areas(area);
+
+        // Messages area block
+        let message_block = Block::default().padding(Padding::new(1, 1, 1, 1));
+
+        // Render the message block first
+        message_block.clone().render(messages_area, buf);
+        let inner_messages_area = message_block.inner(messages_area);
+
+        // Render welcome widget if no messages, otherwise render message list
+        if state.messages.is_empty() {
+            WelcomeWidget.render(inner_messages_area, buf, state);
+        } else {
+            MessageList.render(inner_messages_area, buf, state);
+        }
+
+        // Render menu when visible
+        if state.menu_visible {
+            if state.slash_menu_visible() {
+                // Get the current search term (everything after "/")
+                let text = state.editor.get_text();
+                let search_term = text.strip_prefix('/').unwrap_or("");
+
+                // Get filtered commands using fuzzy search
+                let filtered_commands = crate::domain::SlashCommand::fuzzy_filter(search_term);
+                MenuWidget::new(filtered_commands).render(messages_area, buf, state);
+            } else {
+                // Show all commands when in normal mode
+                MenuWidget::new(SlashCommand::iter().collect()).render(messages_area, buf, state);
+            }
+        }
+
+        let title = Span::styled(
+            " Input ",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        );
+        // User input area block
+        let user_block = Block::bordered()
+            .padding(Padding::new(1, 0, 0, 1))
+            .border_set(
+                if state.menu_visible {
+                    border::Set {
+                        top_left: line::VERTICAL_RIGHT,
+                        top_right: line::VERTICAL_LEFT,
+                        ..border::PLAIN
+                    }
+                } else {
+                    border::PLAIN
+                },
+            )
+            .border_type(BorderType::Rounded)
+            .title(title);
+
+        EditorView::new(&mut state.editor)
+            .theme(
+                EditorTheme::default()
+                    .base(Style::reset())
+                    .cursor_style(Style::default().fg(Color::Black).bg(Color::White))
+                    .hide_status_line(),
+            )
+            .wrap(true)
+            .render(user_block.inner(user_area), buf);
+
+        // Render user input block
+        user_block.render(user_area, buf);
 
         // Render Status Bar
         let status_bar = StatusBar::new("FORGE", state.editor.mode.name(), state.workspace.clone());
@@ -123,7 +181,6 @@ impl StatefulWidget for ChatWidget {
         );
         let [status_bar_area, help_area] = status_bar_layout.areas(status_area);
 
-        user_block.render(user_area, buf);
         ratatui::widgets::Paragraph::new(Line::from(status_bar)).render(status_bar_area, buf);
         ratatui::widgets::Paragraph::new(Line::from("/ for help").alignment(Alignment::Right).dim())
             .render(help_area, buf);
