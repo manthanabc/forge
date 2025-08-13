@@ -64,7 +64,7 @@ impl ForgeEnvironmentInfra {
             max_search_lines: 200,
             max_search_result_bytes: max_bytes.ceil() as usize,
             fetch_truncation_limit: 40_000,
-            max_read_size: 500,
+            max_read_size: 2000,
             stdout_max_prefix_length: 200,
             stdout_max_suffix_length: 200,
             tool_timeout: parse_env::<u64>("FORGE_TOOL_TIMEOUT").unwrap_or(300),
