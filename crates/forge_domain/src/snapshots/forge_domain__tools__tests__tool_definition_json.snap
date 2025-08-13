@@ -329,10 +329,10 @@ expression: tools
 }
 {
   "name": "forge_tool_attempt_completion",
-  "description": "Use this tool ONLY when the entire task is fully completed,\n all sub-tasks are done, and no further actions are required from you.\n Using this tool signifies the final delivery of the requested work.\n IMPORTANT NOTE: This tool CANNOT be used if any tasks are PENDING or\n IN_PROGRESS, or if you expect more input from the user.\n Failure to do so will result in an incomplete or incorrect final answer.\n Before using this tool, you\n must ask yourself in <forge_thinking></forge_thinking> tags if you\\'ve\n confirmed from the user that any previous tool uses were successful.\n If you need to report partial progress or ask a question,\n you MUST use the `forge_tool_partial_completion` tool instead.",
+  "description": "After each tool use, the user will respond with the result of\n that tool use, i.e. if it succeeded or failed, along with any reasons for\n failure. Once you\\'ve received the results of tool uses and can confirm that\n the task is complete, use this tool to present the result of your work to\n the user. The user may respond with feedback if they are not satisfied with\n the result, which you can use to make improvements and try again.\n IMPORTANT NOTE: This tool CANNOT be used until you\\'ve confirmed from the\n user that any previous tool uses were successful. Failure to do so will\n result in code corruption and system failure. Before using this tool, you\n must ask yourself if you\\'ve confirmed from the user that any previous tool\n uses were successful. If not, then DO NOT use this tool.\n If you need to report partial progress or require further input,\n you MUST use the `forge_tool_partial_completion` tool instead.",
   "input_schema": {
     "title": "AttemptCompletion",
-    "description": "Use this tool ONLY when the entire task is fully completed, all sub-tasks are done, and no further actions are required from you. Using this tool signifies the final delivery of the requested work.\n\nIMPORTANT NOTE: This tool CANNOT be used if any tasks are PENDING or IN_PROGRESS, or if you expect more input from the user. Failure to do so will result in an incomplete or incorrect final answer. Before using this tool, you must ask yourself in <forge_thinking></forge_thinking> tags if you've confirmed from the user that any previous tool uses were successful. If you need to report partial progress or ask a question, you MUST use the `forge_tool_partial_completion` tool instead.",
+    "description": "After each tool use, the user will respond with the result of that tool use, i.e. if it succeeded or failed, along with any reasons for failure. Once you've received the results of tool uses and can confirm that the task is complete, use this tool to present the result of your work to the user. The user may respond with feedback if they are not satisfied with the result, which you can use to make improvements and try again. IMPORTANT NOTE: This tool CANNOT be used until you've confirmed from the user that any previous tool uses were successful. Failure to do so will result in code corruption and system failure. Before using this tool, you must ask yourself if you've confirmed from the user that any previous tool uses were successful. If not, then DO NOT use this tool. If you need to report partial progress or require further input, you MUST use the `forge_tool_partial_completion` tool instead.",
     "type": "object",
     "required": [
       "result"
@@ -479,6 +479,40 @@ expression: tools
         "default": null,
         "type": "string",
         "nullable": true
+      }
+    }
+  }
+}
+{
+  "name": "forge_tool_plan_create",
+  "description": "Creates a new plan file with the specified name, version, and content. Use\n this tool to create structured project plans, task breakdowns, or\n implementation strategies that can be tracked and referenced throughout\n development sessions.",
+  "input_schema": {
+    "title": "PlanCreate",
+    "description": "Creates a new plan file with the specified name, version, and content. Use this tool to create structured project plans, task breakdowns, or implementation strategies that can be tracked and referenced throughout development sessions.",
+    "type": "object",
+    "required": [
+      "content",
+      "plan_name",
+      "version"
+    ],
+    "properties": {
+      "content": {
+        "description": "The content to write to the plan file. This should be the complete plan content in markdown format.",
+        "type": "string"
+      },
+      "explanation": {
+        "description": "One sentence explanation as to why this specific tool is being used, and how it contributes to the goal.",
+        "default": null,
+        "type": "string",
+        "nullable": true
+      },
+      "plan_name": {
+        "description": "The name of the plan (will be used in the filename)",
+        "type": "string"
+      },
+      "version": {
+        "description": "The version of the plan (e.g., \"v1\", \"v2\", \"1.0\")",
+        "type": "string"
       }
     }
   }

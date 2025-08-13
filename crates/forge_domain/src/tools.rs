@@ -53,6 +53,7 @@ pub enum Tools {
     ForgeToolTaskListUpdate(TaskListUpdate),
     ForgeToolTaskListList(TaskListList),
     ForgeToolTaskListClear(TaskListClear),
+    ForgeToolPlanCreate(PlanCreate),
 }
 
 /// Input structure for agent tool calls. This serves as the generic schema
@@ -372,17 +373,18 @@ pub struct Followup {
     pub explanation: Option<String>,
 }
 
-/// Use this tool ONLY when the entire task is fully completed,
-/// all sub-tasks are done, and no further actions are required from you.
-/// Using this tool signifies the final delivery of the requested work.
-///
-/// IMPORTANT NOTE: This tool CANNOT be used if any tasks are PENDING or
-/// IN_PROGRESS, or if you expect more input from the user.
-/// Failure to do so will result in an incomplete or incorrect final answer.
-/// Before using this tool, you
-/// must ask yourself in <forge_thinking></forge_thinking> tags if you've
-/// confirmed from the user that any previous tool uses were successful.
-/// If you need to report partial progress or ask a question,
+/// After each tool use, the user will respond with the result of
+/// that tool use, i.e. if it succeeded or failed, along with any reasons for
+/// failure. Once you've received the results of tool uses and can confirm that
+/// the task is complete, use this tool to present the result of your work to
+/// the user. The user may respond with feedback if they are not satisfied with
+/// the result, which you can use to make improvements and try again.
+/// IMPORTANT NOTE: This tool CANNOT be used until you've confirmed from the
+/// user that any previous tool uses were successful. Failure to do so will
+/// result in code corruption and system failure. Before using this tool, you
+/// must ask yourself if you've confirmed from the user that any previous tool
+/// uses were successful. If not, then DO NOT use this tool.
+/// If you need to report partial progress or require further input,
 /// you MUST use the `forge_tool_partial_completion` tool instead.
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
 pub struct AttemptCompletion {
@@ -464,6 +466,28 @@ pub struct TaskListList {
 /// fresh with a clean task list.
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
 pub struct TaskListClear {
+    /// One sentence explanation as to why this specific tool is being used, and
+    /// how it contributes to the goal.
+    #[serde(default)]
+    pub explanation: Option<String>,
+}
+
+/// Creates a new plan file with the specified name, version, and content. Use
+/// this tool to create structured project plans, task breakdowns, or
+/// implementation strategies that can be tracked and referenced throughout
+/// development sessions.
+#[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
+pub struct PlanCreate {
+    /// The name of the plan (will be used in the filename)
+    pub plan_name: String,
+
+    /// The version of the plan (e.g., "v1", "v2", "1.0")
+    pub version: String,
+
+    /// The content to write to the plan file. This should be the complete
+    /// plan content in markdown format.
+    pub content: String,
+
     /// One sentence explanation as to why this specific tool is being used, and
     /// how it contributes to the goal.
     #[serde(default)]
@@ -597,6 +621,7 @@ impl ToolDescription for Tools {
             Tools::ForgeToolTaskListUpdate(v) => v.description(),
             Tools::ForgeToolTaskListList(v) => v.description(),
             Tools::ForgeToolTaskListClear(v) => v.description(),
+            Tools::ForgeToolPlanCreate(v) => v.description(),
         }
     }
 }
@@ -643,6 +668,7 @@ impl Tools {
             Tools::ForgeToolTaskListUpdate(_) => r#gen.into_root_schema_for::<TaskListUpdate>(),
             Tools::ForgeToolTaskListList(_) => r#gen.into_root_schema_for::<TaskListList>(),
             Tools::ForgeToolTaskListClear(_) => r#gen.into_root_schema_for::<TaskListClear>(),
+            Tools::ForgeToolPlanCreate(_) => r#gen.into_root_schema_for::<PlanCreate>(),
         }
     }
 
