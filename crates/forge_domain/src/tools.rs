@@ -680,7 +680,7 @@ impl Tools {
     pub fn contains(tool_name: &ToolName) -> bool {
         FORGE_TOOLS.contains(tool_name)
     }
-    pub fn should_yeild(tool_name: &ToolName) -> bool {
+    pub fn should_yield(tool_name: &ToolName) -> bool {
         // Tools that convey that the execution should yield
         [
             ToolsDiscriminants::ForgeToolAttemptCompletion,

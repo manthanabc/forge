@@ -458,7 +458,7 @@ impl<S: AgentService> Orchestrator<S> {
 
             is_complete = tool_calls
                 .iter()
-                .any(|call| Tools::should_yeild(&call.name));
+                .any(|call| Tools::should_yield(&call.name));
 
             if !is_complete && has_tool_calls {
                 // If task is completed we would have already displayed a message so we can
