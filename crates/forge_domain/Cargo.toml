@@ -33,6 +33,7 @@ lazy_static = "1.5.0"
 convert_case.workspace = true
 forge_json_repair.workspace = true
 colored.workspace = true
+glob.workspace = true
 
 [dev-dependencies]
 insta = { workspace = true, features = ["yaml"] }
