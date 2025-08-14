@@ -47,7 +47,6 @@ pub enum Tools {
     ForgeToolNetFetch(NetFetch),
     ForgeToolFollowup(Followup),
     ForgeToolAttemptCompletion(AttemptCompletion),
-
     ForgeToolTaskListAppend(TaskListAppend),
     ForgeToolTaskListAppendMultiple(TaskListAppendMultiple),
     ForgeToolTaskListUpdate(TaskListUpdate),
@@ -384,8 +383,6 @@ pub struct Followup {
 /// result in code corruption and system failure. Before using this tool, you
 /// must ask yourself if you've confirmed from the user that any previous tool
 /// uses were successful. If not, then DO NOT use this tool.
-/// If you need to report partial progress or require further input,
-/// use the `forge_tool_followup` tool instead.
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
 pub struct AttemptCompletion {
     /// The result of the task. Formulate this result in a way that is final and
