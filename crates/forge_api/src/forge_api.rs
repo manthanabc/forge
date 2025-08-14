@@ -169,6 +169,11 @@ impl<A: Services, F: CommandInfra> API for ForgeAPI<A, F> {
         self.services.read_app_config().await
     }
 
+    async fn enhance_prompt(&self, original_prompt: &str) -> Result<String> {
+        let app = ForgeApp::new(self.services.clone());
+        app.enhance_prompt(original_prompt).await
+    }
+
     async fn user_info(&self) -> Result<Option<User>> {
         let provider = self.provider().await?;
         if let Some(api_key) = provider.key() {

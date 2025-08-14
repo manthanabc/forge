@@ -5,6 +5,7 @@ use anyhow::{Context, Result};
 use chrono::Local;
 use forge_domain::*;
 use forge_stream::MpscStream;
+use tokio_stream::StreamExt;
 
 use crate::authenticator::Authenticator;
 use crate::dto::InitAuth;
@@ -220,5 +221,47 @@ impl<S: Services> ForgeApp<S> {
     }
     pub async fn write_workflow(&self, path: Option<&Path>, workflow: &Workflow) -> Result<()> {
         self.workflow_manager.write_workflow(path, workflow).await
+    }
+
+    pub async fn enhance_prompt(&self, original_prompt: &str) -> Result<String> {
+        // Read the current workflow to get enhancement configuration
+        let workflow = self.read_workflow_merged(None).await?;
+        
+        // Check if prompt enhancement is configured
+        let enhancer = workflow.prompt_enhancer
+            .ok_or_else(|| anyhow::anyhow!("Prompt enhancement not configured in workflow"))?;
+        
+        let model = enhancer.model
+            .ok_or_else(|| anyhow::anyhow!("Enhancement model not specified"))?;
+        
+        let template = enhancer.template.unwrap_or_else(|| {
+            "Please enhance the following prompt to be more clear, specific, and effective:\n\nOriginal prompt: {{original_prompt}}\n\nEnhanced prompt:".to_string()
+        });
+        
+        // Replace the template variable with the original prompt
+        let enhanced_prompt_request = template.replace("{{original_prompt}}", original_prompt);
+        
+        // Create a minimal chat request for enhancement
+        let chat_request = ChatRequest::new()
+            .message(enhanced_prompt_request)
+            .model(model);
+        
+        // Execute the chat request and get the enhanced prompt
+        let mut response_stream = self.chat(chat_request).await?;
+        let mut enhanced_content = String::new();
+        
+        while let Some(response) = response_stream.next().await {
+            match response? {
+                ChatResponse::Delta(delta) => {
+                    if let Some(content) = delta.content {
+                        enhanced_content.push_str(&content);
+                    }
+                }
+                ChatResponse::Done(_) => break,
+                _ => continue,
+            }
+        }
+        
+        Ok(enhanced_content.trim().to_string())
     }
 }

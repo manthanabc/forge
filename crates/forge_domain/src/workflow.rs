@@ -11,6 +11,21 @@ use crate::temperature::Temperature;
 use crate::update::Update;
 use crate::{Agent, AgentId, Compact, MaxTokens, ModelId, TopK, TopP};
 
+/// Configuration for prompt enhancement feature
+#[derive(Debug, Clone, Serialize, Deserialize, Merge, Setters, JsonSchema, PartialEq)]
+#[setters(strip_option, into)]
+pub struct PromptEnhancer {
+    /// Model to use for prompt enhancement
+    #[merge(strategy = crate::merge::option)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<ModelId>,
+
+    /// Template for prompt enhancement
+    #[merge(strategy = crate::merge::option)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub template: Option<String>,
+}
+
 /// Configuration for a workflow that contains all settings
 /// required to initialize a workflow.
 #[derive(Debug, Clone, Serialize, Deserialize, Merge, Setters, JsonSchema)]
@@ -141,6 +156,13 @@ pub struct Workflow {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[merge(strategy = crate::merge::option)]
     pub compact: Option<Compact>,
+
+    /// Configuration for prompt enhancement feature
+    /// Allows users to press Ctrl+E to enhance their prompts using AI
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[merge(strategy = crate::merge::option)]
+    pub prompt_enhancer: Option<PromptEnhancer>,
 }
 
 lazy_static! {
@@ -189,6 +211,7 @@ impl Workflow {
             max_tool_failure_per_turn: None,
             max_requests_per_turn: None,
             compact: None,
+            prompt_enhancer: None,
         }
     }
 
@@ -228,6 +251,7 @@ mod tests {
         assert_eq!(actual.max_tokens, None);
         assert_eq!(actual.tool_supported, None);
         assert_eq!(actual.compact, None);
+        assert_eq!(actual.prompt_enhancer, None);
     }
 
     #[test]
@@ -316,5 +340,44 @@ mod tests {
 
         // Assert
         assert_eq!(base.compact, Some(new_compact));
+    }
+
+    #[test]
+    fn test_prompt_enhancer_serialization() {
+        // Arrange
+        let fixture = r#"
+        {
+            "prompt_enhancer": {
+                "model": "anthropic/claude-sonnet-4",
+                "template": "Please enhance: {{original_prompt}}"
+            }
+        }
+        "#;
+
+        // Act
+        let actual: Workflow = serde_json::from_str(fixture).unwrap();
+
+        // Assert
+        let enhancer = actual.prompt_enhancer.unwrap();
+        assert_eq!(enhancer.model, Some(ModelId::new("anthropic/claude-sonnet-4")));
+        assert_eq!(enhancer.template, Some("Please enhance: {{original_prompt}}".to_string()));
+    }
+
+    #[test]
+    fn test_workflow_merge_prompt_enhancer() {
+        // Fixture
+        let mut base = Workflow::new();
+
+        let enhancer = PromptEnhancer {
+            model: Some(ModelId::new("test-model")),
+            template: Some("Test template".to_string()),
+        };
+        let other = Workflow::new().prompt_enhancer(enhancer.clone());
+
+        // Act
+        base.merge(other);
+
+        // Assert
+        assert_eq!(base.prompt_enhancer, Some(enhancer));
     }
 }

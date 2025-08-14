@@ -60,6 +60,14 @@ impl ForgeEditor {
             ReedlineEvent::Edit(vec![EditCommand::InsertNewline]),
         );
 
+        // on CTRL + e press triggers prompt enhancement (placeholder for now)
+        // This will be handled at the input processing level
+        keybindings.add_binding(
+            KeyModifiers::CONTROL,
+            KeyCode::Char('e'),
+            ReedlineEvent::Edit(vec![EditCommand::Complete]),
+        );
+
         keybindings
     }
 

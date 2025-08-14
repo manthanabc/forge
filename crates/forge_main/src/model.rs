@@ -187,6 +187,7 @@ impl ForgeCommandManager {
             "/login" => Ok(Command::Login),
             "/logout" => Ok(Command::Logout),
             "/retry" => Ok(Command::Retry),
+            "/enhance" => Ok(Command::Enhance),
             text => {
                 let parts = text.split_ascii_whitespace().collect::<Vec<&str>>();
 
@@ -289,6 +290,10 @@ pub enum Command {
     /// Retry without modifying model context
     #[strum(props(usage = "Retry the last command"))]
     Retry,
+
+    /// Enhance the last message using AI
+    #[strum(props(usage = "Enhance the last message for clarity and effectiveness"))]
+    Enhance,
 }
 
 impl Command {
@@ -313,6 +318,7 @@ impl Command {
             Command::Login => "/login",
             Command::Logout => "/logout",
             Command::Retry => "/retry",
+            Command::Enhance => "/enhance",
         }
     }
 

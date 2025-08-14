@@ -485,6 +485,9 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 self.spinner.start(None)?;
                 self.on_message(None).await?;
             }
+            Command::Enhance => {
+                self.on_enhance().await?;
+            }
         }
 
         Ok(false)
@@ -498,6 +501,47 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             "Context size reduced by {token_reduction:.1}% (tokens), {message_reduction:.1}% (messages)"
         ));
         self.writeln(content)?;
+        Ok(())
+    }
+
+    async fn on_enhance(&mut self) -> Result<()> {
+        // Get the last user message from conversation history
+        let conversation_id = self.init_conversation().await?;
+        let conversation = self.api.conversation(&conversation_id).await?
+            .ok_or_else(|| anyhow::anyhow!("No active conversation found"))?;
+        
+        // Find the last user message
+        let last_user_message = conversation.events.iter()
+            .rev()
+            .find_map(|event| {
+                if let Event::UserMessage(message) = event {
+                    Some(message.content.clone())
+                } else {
+                    None
+                }
+            })
+            .ok_or_else(|| anyhow::anyhow!("No user message found to enhance"))?;
+
+        self.spinner.start(Some("Enhancing prompt..."))?;
+        
+        // Call the enhancement API
+        match self.api.enhance_prompt(&last_user_message).await {
+            Ok(enhanced_prompt) => {
+                self.spinner.stop(None)?;
+                self.writeln(TitleFormat::info("Enhanced prompt:"))?;
+                self.writeln(&enhanced_prompt)?;
+                self.writeln("")?;
+                self.writeln(TitleFormat::action("Send this enhanced prompt? (y/n/edit)"))?;
+                
+                // For now, just display the enhanced prompt
+                // TODO: Add interactive handling to let user choose to send/edit/cancel
+            }
+            Err(e) => {
+                self.spinner.stop(None)?;
+                self.writeln(TitleFormat::error(format!("Enhancement failed: {}", e)))?;
+            }
+        }
+        
         Ok(())
     }
 
