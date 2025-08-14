@@ -14,12 +14,13 @@ use crate::agent_executor::AgentExecutor;
 use crate::error::Error;
 use crate::mcp_executor::McpExecutor;
 use crate::tool_executor::ToolExecutor;
-use crate::{McpService, Services};
+use crate::{EnvironmentService, McpService, Services};
 
 pub struct ToolRegistry<S> {
     tool_executor: ToolExecutor<S>,
     agent_executor: AgentExecutor<S>,
     mcp_executor: McpExecutor<S>,
+    tool_timeout: Duration,
 }
 
 impl<S: Services> ToolRegistry<S> {
@@ -27,24 +28,24 @@ impl<S: Services> ToolRegistry<S> {
         Self {
             tool_executor: ToolExecutor::new(services.clone()),
             agent_executor: AgentExecutor::new(services.clone()),
-            mcp_executor: McpExecutor::new(services),
+            mcp_executor: McpExecutor::new(services.clone()),
+            tool_timeout: Duration::from_secs(services.get_environment().tool_timeout),
         }
     }
 
     async fn call_with_timeout<F, Fut>(
         &self,
         tool_name: &ToolName,
-        tool_timeout: Duration,
         future: F,
     ) -> anyhow::Result<ToolOutput>
     where
         F: FnOnce() -> Fut,
         Fut: std::future::Future<Output = anyhow::Result<ToolOutput>>,
     {
-        timeout(tool_timeout, future())
+        timeout(self.tool_timeout, future())
             .await
             .context(Error::CallTimeout {
-                timeout: tool_timeout.as_secs() / 60,
+                timeout: self.tool_timeout.as_secs() / 60,
                 tool_name: tool_name.clone(),
             })?
     }
@@ -53,7 +54,6 @@ impl<S: Services> ToolRegistry<S> {
         &self,
         agent: &Agent,
         input: ToolCallFull,
-        tool_timeout: Duration,
         context: &mut ToolCallContext,
     ) -> anyhow::Result<ToolOutput> {
         Self::validate_tool_call(agent, &input.name)?;
@@ -63,10 +63,8 @@ impl<S: Services> ToolRegistry<S> {
 
         // First, try to call a Forge tool
         if Tools::contains(&input.name) {
-            self.call_with_timeout(&tool_name, tool_timeout, || {
-                self.tool_executor.execute(input, context)
-            })
-            .await
+            self.call_with_timeout(&tool_name, || self.tool_executor.execute(input, context))
+                .await
         } else if self.agent_executor.contains_tool(&input.name).await? {
             // Handle agent delegation tool calls
             let agent_input = AgentInput::try_from(&input)?;
@@ -76,9 +74,7 @@ impl<S: Services> ToolRegistry<S> {
                 .await
         } else if self.mcp_executor.contains_tool(&input.name).await? {
             let output = self
-                .call_with_timeout(&tool_name, tool_timeout, || {
-                    self.mcp_executor.execute(input, context)
-                })
+                .call_with_timeout(&tool_name, || self.mcp_executor.execute(input, context))
                 .await?;
             let text = output
                 .values
@@ -104,13 +100,12 @@ impl<S: Services> ToolRegistry<S> {
     pub async fn call(
         &self,
         agent: &Agent,
-        tool_timeout: Duration,
         context: &mut ToolCallContext,
         call: ToolCallFull,
     ) -> ToolResult {
         let call_id = call.call_id.clone();
         let tool_name = call.name.clone();
-        let output = self.call_inner(agent, call, tool_timeout, context).await;
+        let output = self.call_inner(agent, call, context).await;
 
         ToolResult::new(tool_name).call_id(call_id).output(output)
     }

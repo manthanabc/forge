@@ -1,6 +1,5 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
-use std::time::Duration;
 
 use forge_domain::{
     ChatCompletionMessage, ChatResponse, Conversation, ConversationId, ToolCallFull, ToolResult,
@@ -111,7 +110,6 @@ impl AgentService for Runner {
     async fn call(
         &self,
         _agent: &forge_domain::Agent,
-        _timeout: Duration,
         _context: &mut forge_domain::ToolCallContext,
         test_call: forge_domain::ToolCallFull,
     ) -> forge_domain::ToolResult {
