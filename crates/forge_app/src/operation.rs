@@ -84,7 +84,7 @@ pub enum Operation {
         output: Option<String>,
     },
     AttemptCompletion,
-    PartialCompletion,
+
     TaskListAppend {
         _input: TaskListAppend,
         before: TaskList,
@@ -491,11 +491,6 @@ impl Operation {
                 Element::new("success")
                     .text("[Task was completed successfully. Now wait for user feedback]"),
             ),
-            Operation::PartialCompletion => {
-                forge_domain::ToolOutput::text(Element::new("partial_success").text(
-                    "[Task was partially completed. Waiting for further instructions or feedback]",
-                ))
-            }
             Operation::TaskListAppend { _input: _, before: _, after }
             | Operation::TaskListAppendMultiple { _input: _, before: _, after }
             | Operation::TaskListUpdate { _input: _, before: _, after }

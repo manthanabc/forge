@@ -63,7 +63,7 @@ impl<S: AgentService> Orchestrator<S> {
         // Always process tool calls sequentially
         let mut tool_call_records = Vec::with_capacity(tool_calls.len());
 
-        // get tiemout from env
+        // get timeout from env
         for tool_call in tool_calls {
             info!(agent_id = %agent.id, tool_name = %tool_call.name, "Executing tool");
             // Send the start notification

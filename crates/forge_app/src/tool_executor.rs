@@ -228,9 +228,6 @@ impl<
             Tools::ForgeToolAttemptCompletion(_input) => {
                 crate::operation::Operation::AttemptCompletion
             }
-            Tools::ForgeToolPartialCompletion(_input) => {
-                crate::operation::Operation::PartialCompletion
-            }
             Tools::ForgeToolTaskListAppend(input) => {
                 let before = context.tasks.clone();
                 context.tasks.append(&input.task);

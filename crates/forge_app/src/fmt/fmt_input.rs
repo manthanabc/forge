@@ -85,9 +85,6 @@ impl FormatContent for Tools {
             Tools::ForgeToolAttemptCompletion(input) => {
                 Some(ContentFormat::Markdown(input.result.clone()))
             }
-            Tools::ForgeToolPartialCompletion(input) => {
-                Some(ContentFormat::Markdown(input.result.clone()))
-            }
             Tools::ForgeToolTaskListAppend(_) => {
                 Some(TitleFormat::debug("Task +1 ADD".to_string()).into())
             }

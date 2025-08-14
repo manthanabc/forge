@@ -102,7 +102,7 @@ impl From<&Metrics> for SessionSummary {
                 let total_seconds = d.as_secs();
                 let minutes = total_seconds / 60;
                 let seconds = total_seconds % 60;
-                format!("{}m {}s", minutes, seconds)
+                format!("{minutes}m {seconds}s")
             }
             None => "0m 0s".to_string(),
         };
