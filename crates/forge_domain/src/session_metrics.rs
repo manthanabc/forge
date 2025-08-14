@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
-use colored::Colorize;
 use derive_setters::Setters;
 use serde::{Deserialize, Serialize};
 
@@ -115,52 +114,6 @@ impl From<&Metrics> for SessionSummary {
             net_change: metrics.net_change(),
             operations: metrics.operations_count,
         }
-    }
-}
-
-impl std::fmt::Display for SessionSummary {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "{}", "SESSION SUMMARY".bold().dimmed())?;
-        writeln!(f, "{}: {}", "Duration".bright_cyan().bold(), self.duration)?;
-        writeln!(
-            f,
-            "{}: {}",
-            "Files Changed".bright_cyan().bold(),
-            self.files_changed
-        )?;
-        writeln!(
-            f,
-            "{}: {}",
-            "Lines Added".bright_cyan().bold(),
-            self.lines_added.to_string().green()
-        )?;
-        writeln!(
-            f,
-            "{}: {}",
-            "Lines Removed".bright_cyan().bold(),
-            self.lines_removed.to_string().red()
-        )?;
-
-        let colored_net_change = if self.net_change >= 0 {
-            format!("{:+}", self.net_change).green()
-        } else {
-            format!("{}", self.net_change).red()
-        };
-
-        writeln!(
-            f,
-            "{}: {}",
-            "Net Change (lines)".bright_cyan().bold(),
-            colored_net_change
-        )?;
-        writeln!(
-            f,
-            "{}: {}",
-            "Operations".bright_cyan().bold(),
-            self.operations
-        )?;
-
-        Ok(())
     }
 }
 

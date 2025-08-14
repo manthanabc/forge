@@ -28,17 +28,15 @@ struct FileOperationStats {
     lines_removed: u64,
 }
 
-fn file_change_stats(operation: FileOperationStats, metrics: Option<&mut Metrics>) {
+fn file_change_stats(operation: FileOperationStats, metrics: &mut Metrics) {
     tracing::info!(path = %operation.path, type = %operation.tool_name, lines_added = %operation.lines_added, lines_removed = %operation.lines_removed, "File change stats");
 
-    // Record metrics if available
-    if let Some(metrics) = metrics {
-        metrics.record_file_operation(
-            operation.path,
-            operation.lines_added,
-            operation.lines_removed,
-        );
-    }
+    // Record the operations
+    metrics.record_file_operation(
+        operation.path,
+        operation.lines_added,
+        operation.lines_removed,
+    );
 }
 
 #[derive(Debug, Default, Setters)]
@@ -230,7 +228,7 @@ impl Operation {
         tool_name: ToolName,
         content_files: TempContentFiles,
         env: &Environment,
-        metrics: Option<&mut Metrics>,
+        metrics: &mut Metrics,
     ) -> forge_domain::ToolOutput {
         match self {
             Operation::FsRead { input, output } => match &output.content {
@@ -606,7 +604,7 @@ mod tests {
             ToolName::new("forge_tool_fs_read"),
             TempContentFiles::default(),
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -635,7 +633,7 @@ mod tests {
             ToolName::new("forge_tool_fs_read"),
             TempContentFiles::default(),
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -664,7 +662,7 @@ mod tests {
             ToolName::new("forge_tool_fs_read"),
             TempContentFiles::default(),
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -695,7 +693,7 @@ mod tests {
             ToolName::new("forge_tool_fs_read"),
             truncation_path,
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -723,7 +721,7 @@ mod tests {
             ToolName::new("forge_tool_fs_create"),
             TempContentFiles::default(),
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -750,7 +748,7 @@ mod tests {
             ToolName::new("forge_tool_fs_create"),
             TempContentFiles::default(),
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -775,7 +773,7 @@ mod tests {
             ToolName::new("forge_tool_fs_create"),
             TempContentFiles::default(),
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -809,7 +807,7 @@ mod tests {
             ToolName::new("forge_tool_process_shell"),
             truncation_path,
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -843,7 +841,7 @@ mod tests {
             ToolName::new("forge_tool_process_shell"),
             truncation_path,
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -884,7 +882,7 @@ mod tests {
             ToolName::new("forge_tool_process_shell"),
             truncation_path,
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -916,7 +914,7 @@ mod tests {
             ToolName::new("forge_tool_process_shell"),
             TempContentFiles::default(),
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -941,7 +939,7 @@ mod tests {
             ToolName::new("forge_tool_process_shell"),
             TempContentFiles::default(),
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -966,7 +964,7 @@ mod tests {
             ToolName::new("forge_tool_process_shell"),
             TempContentFiles::default(),
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -1007,7 +1005,7 @@ mod tests {
             ToolName::new("forge_tool_process_shell"),
             truncation_path,
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -1046,7 +1044,7 @@ mod tests {
             ToolName::new("forge_tool_fs_search"),
             TempContentFiles::default(),
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -1087,7 +1085,7 @@ mod tests {
             ToolName::new("forge_tool_fs_search"),
             TempContentFiles::default(),
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -1130,7 +1128,7 @@ mod tests {
             ToolName::new("forge_tool_fs_search"),
             TempContentFiles::default(),
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -1176,7 +1174,7 @@ mod tests {
             ToolName::new("forge_tool_fs_search"),
             TempContentFiles::default(),
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -1202,7 +1200,7 @@ mod tests {
             ToolName::new("forge_tool_fs_search"),
             TempContentFiles::default(),
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -1223,7 +1221,7 @@ mod tests {
             ToolName::new("forge_tool_task_list_list"),
             TempContentFiles::default(),
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -1248,7 +1246,7 @@ mod tests {
             ToolName::new("forge_tool_task_list_list"),
             TempContentFiles::default(),
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -1281,7 +1279,7 @@ mod tests {
             ToolName::new("forge_tool_task_list_list"),
             TempContentFiles::default(),
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -1317,7 +1315,7 @@ mod tests {
             ToolName::new("forge_tool_task_list_list"),
             TempContentFiles::default(),
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -1346,7 +1344,7 @@ mod tests {
             ToolName::new("forge_tool_task_list_append"),
             TempContentFiles::default(),
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -1377,7 +1375,7 @@ mod tests {
             ToolName::new("forge_tool_task_list_update"),
             TempContentFiles::default(),
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -1413,7 +1411,7 @@ mod tests {
             ToolName::new("forge_tool_task_list_list"),
             TempContentFiles::default(),
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -1441,7 +1439,7 @@ mod tests {
             ToolName::new("forge_tool_fs_create"),
             TempContentFiles::default(),
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -1462,7 +1460,7 @@ mod tests {
             ToolName::new("forge_tool_fs_remove"),
             TempContentFiles::default(),
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -1505,7 +1503,7 @@ mod tests {
             ToolName::new("forge_tool_fs_search"),
             TempContentFiles::default(),
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -1531,7 +1529,7 @@ mod tests {
             ToolName::new("forge_tool_fs_search"),
             TempContentFiles::default(),
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -1560,7 +1558,7 @@ mod tests {
             ToolName::new("forge_tool_fs_patch"),
             TempContentFiles::default(),
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -1589,7 +1587,7 @@ mod tests {
             ToolName::new("forge_tool_fs_patch"),
             TempContentFiles::default(),
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -1611,7 +1609,7 @@ mod tests {
             ToolName::new("forge_tool_fs_undo"),
             TempContentFiles::default(),
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -1636,7 +1634,7 @@ mod tests {
             ToolName::new("forge_tool_fs_undo"),
             TempContentFiles::default(),
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -1663,7 +1661,7 @@ mod tests {
             ToolName::new("forge_tool_fs_undo"),
             TempContentFiles::default(),
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -1688,7 +1686,7 @@ mod tests {
             ToolName::new("forge_tool_fs_undo"),
             TempContentFiles::default(),
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -1713,7 +1711,7 @@ mod tests {
             ToolName::new("forge_tool_fs_undo"),
             TempContentFiles::default(),
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -1741,7 +1739,7 @@ mod tests {
             ToolName::new("forge_tool_net_fetch"),
             TempContentFiles::default(),
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -1777,7 +1775,7 @@ mod tests {
             ToolName::new("forge_tool_net_fetch"),
             truncation_path,
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         // make sure that the content is truncated
@@ -1813,7 +1811,7 @@ mod tests {
             ToolName::new("forge_tool_process_shell"),
             TempContentFiles::default(),
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -1829,7 +1827,7 @@ mod tests {
             ToolName::new("forge_tool_attempt_completion"),
             TempContentFiles::default(),
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -1847,7 +1845,7 @@ mod tests {
             ToolName::new("forge_tool_followup"),
             TempContentFiles::default(),
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));
@@ -1863,7 +1861,7 @@ mod tests {
             ToolName::new("forge_tool_followup"),
             TempContentFiles::default(),
             &env,
-            None,
+            &mut Metrics::new(),
         );
 
         insta::assert_snapshot!(to_value(actual));

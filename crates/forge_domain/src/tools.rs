@@ -663,12 +663,15 @@ impl Tools {
     }
     pub fn should_yield(tool_name: &ToolName) -> bool {
         // Tools that convey that the execution should yield
-        [ToolsDiscriminants::ForgeToolAttemptCompletion]
-            .iter()
-            .any(|v| v.to_string().to_case(Case::Snake).eq(tool_name.as_str()))
+        [
+            ToolsDiscriminants::ForgeToolAttemptCompletion,
+            ToolsDiscriminants::ForgeToolFollowup,
+        ]
+        .iter()
+        .any(|v| v.to_string().to_case(Case::Snake).eq(tool_name.as_str()))
     }
     pub fn is_complete(tool_name: &ToolName) -> bool {
-        // Tools that convey that conversation might be completed
+        // Tool that convey that conversation might be completed
         [ToolsDiscriminants::ForgeToolAttemptCompletion]
             .iter()
             .any(|v| v.to_string().to_case(Case::Snake).eq(tool_name.as_str()))

@@ -304,13 +304,6 @@ impl<
 
         let truncation_path = self.dump_operation(&operation).await?;
 
-        Ok(
-            operation.into_tool_output(
-                tool_name,
-                truncation_path,
-                &env,
-                Some(&mut context.metrics),
-            ),
-        )
+        Ok(operation.into_tool_output(tool_name, truncation_path, &env, context.metrics))
     }
 }

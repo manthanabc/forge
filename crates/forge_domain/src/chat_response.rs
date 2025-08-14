@@ -27,7 +27,7 @@ pub enum ChatResponse {
     Reasoning {
         content: String,
     },
-    ChatComplete(Option<SessionSummary>),
+    ChatComplete(SessionSummary),
 }
 
 #[derive(Debug, Clone)]

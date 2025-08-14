@@ -851,8 +851,13 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
         Ok(())
     }
 
-    async fn on_completion(&mut self, summary: Option<SessionSummary>) -> anyhow::Result<()> {
+    async fn on_completion(&mut self, summary: SessionSummary) -> anyhow::Result<()> {
         self.spinner.stop(None)?;
+
+        // Show usage info
+        self.writeln(Info::from(&self.state))?;
+        // Show summary
+        self.writeln(Info::from(summary))?;
 
         let should_start_new_chat = ForgeSelect::confirm("Do you want to start a new chat?")
             .with_default(true)
@@ -860,13 +865,6 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
 
         // if conversation is over
         if should_start_new_chat.unwrap_or(false) {
-            // Show usage info
-            self.writeln(Info::from(&self.state))?;
-
-            // Show summary
-            if let Some(s) = summary {
-                self.writeln(s)?;
-            }
             self.on_new().await?;
         }
 

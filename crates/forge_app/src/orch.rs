@@ -63,9 +63,7 @@ impl<S: AgentService> Orchestrator<S> {
         // Always process tool calls sequentially
         let mut tool_call_records = Vec::with_capacity(tool_calls.len());
 
-        // get timeout from env
         for tool_call in tool_calls {
-            info!(agent_id = %agent.id, tool_name = %tool_call.name, "Executing tool");
             // Send the start notification
             self.send(ChatResponse::ToolCallStart(tool_call.clone()))
                 .await?;
@@ -381,9 +379,6 @@ impl<S: AgentService> Orchestrator<S> {
         let mut turn_has_tool_calls = false;
 
         while !is_complete {
-            let mut tool_context =
-                ToolCallContext::new(self.conversation.tasks.clone(), &mut metrics)
-                    .sender(self.sender.clone());
             // Set context for the current loop iteration
             self.conversation.context = Some(context.clone());
             self.services.update(self.conversation.clone()).await?;
@@ -482,6 +477,10 @@ impl<S: AgentService> Orchestrator<S> {
                 self.send(ChatResponse::Reasoning { content: reasoning.to_string() })
                     .await?;
             }
+
+            let mut tool_context =
+                ToolCallContext::new(self.conversation.tasks.clone(), &mut metrics)
+                    .sender(self.sender.clone());
 
             // Check if tool calls are within allowed limits if max_tool_failure_per_turn is
             // configured
@@ -626,7 +625,7 @@ impl<S: AgentService> Orchestrator<S> {
 
         if has_attempted_completion {
             let summary = SessionSummary::from(&metrics);
-            self.send(ChatResponse::ChatComplete(Some(summary))).await?;
+            self.send(ChatResponse::ChatComplete(summary)).await?;
         }
 
         self.conversation.metrics = metrics;
