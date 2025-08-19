@@ -5,8 +5,8 @@ use anyhow::{Context, Result};
 use forge_app::dto::{AppConfig, InitAuth};
 use forge_app::{
     AppConfigService, AuthService, ConversationService, EnvironmentService, FileDiscoveryService,
-    ForgeApp, McpConfigManager, ProviderRegistry, ProviderService, Services, User, UserUsage,
-    Walker, WorkflowService,
+    ForgeApp, McpConfigManager, ProviderInfo, ProviderRegistry, ProviderService, Services, User,
+    UserUsage, Walker, WorkflowService,
 };
 use forge_domain::*;
 use forge_infra::ForgeInfra;
@@ -185,5 +185,9 @@ impl<A: Services, F: CommandInfra> API for ForgeAPI<A, F> {
             return Ok(Some(user_usage));
         }
         Ok(None)
+    }
+    async fn list_providers(&self) -> anyhow::Result<Vec<ProviderInfo>> {
+        let config = self.services.read_app_config().await.unwrap_or_default();
+        self.services.list_providers(config).await
     }
 }

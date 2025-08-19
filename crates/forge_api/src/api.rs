@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use forge_app::dto::{AppConfig, InitAuth};
-use forge_app::{User, UserUsage};
+use forge_app::{ProviderInfo, User, UserUsage};
 use forge_stream::MpscStream;
 
 use crate::*;
@@ -100,4 +100,5 @@ pub trait API: Sync + Send {
     async fn app_config(&self) -> anyhow::Result<AppConfig>;
     async fn user_info(&self) -> anyhow::Result<Option<User>>;
     async fn user_usage(&self) -> anyhow::Result<Option<UserUsage>>;
+    async fn list_providers(&self) -> anyhow::Result<Vec<ProviderInfo>>;
 }

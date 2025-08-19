@@ -183,6 +183,7 @@ impl ForgeCommandManager {
             "/help" => Ok(Command::Help),
             "/model" => Ok(Command::Model),
             "/tools" => Ok(Command::Tools),
+            "/provider" => Ok(Command::Provider),
             "/agent" => Ok(Command::Agent),
             "/login" => Ok(Command::Login),
             "/logout" => Ok(Command::Logout),
@@ -265,6 +266,10 @@ pub enum Command {
     /// This can be triggered with the '/tools' command.
     #[strum(props(usage = "List all available tools with their descriptions and schema"))]
     Tools,
+    /// Switch or select the active provider
+    /// This can be triggered with the '/provider' command.
+    #[strum(props(usage = "Switch to a different provider"))]
+    Provider,
     /// Handles custom command defined in workflow file.
     Custom(PartialEvent),
     /// Executes a native shell command.
@@ -307,6 +312,7 @@ impl Command {
             Command::Dump(_) => "/dump",
             Command::Model => "/model",
             Command::Tools => "/tools",
+            Command::Provider => "/provider",
             Command::Custom(event) => &event.name,
             Command::Shell(_) => "!shell",
             Command::Agent => "/agent",

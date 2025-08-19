@@ -89,6 +89,59 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
         Ok(())
     }
 
+    async fn select_provider(&mut self) -> Result<Option<String>> {
+        let providers = self.api.list_providers().await?;
+
+        if providers.is_empty() {
+            self.writeln(
+                "No providers configured. Create a providers.yaml file to configure providers.",
+            )?;
+            return Ok(None);
+        }
+
+        // Find the currently active provider for cursor positioning
+        let starting_cursor = providers
+            .iter()
+            .position(|p| p.is_active)
+            .unwrap_or(0);
+
+        // Create a simple list of provider names
+        let provider_names: Vec<String> = providers
+            .iter()
+            .map(|provider| provider.name.clone())
+            .collect();
+
+        // Use the centralized select module
+        match ForgeSelect::select("Select a provider:", provider_names)
+            .with_starting_cursor(starting_cursor)
+            .with_help_message("Type a name or use arrow keys to navigate and Enter to select")
+            .prompt()?
+        {
+            Some(selected_name) => {
+                // Find the provider ID by name
+                let provider_id = providers
+                    .iter()
+                    .find(|p| p.name == selected_name)
+                    .map(|p| p.id.clone());
+                Ok(provider_id)
+            }
+            None => Ok(None),
+        }
+    }
+
+    // Helper method to handle provider selection and update the configuration
+    async fn on_provider_selection(&mut self) -> Result<()> {
+        let provider_option = self.select_provider().await?;
+
+        let provider_id = match provider_option {
+            Some(id) => id,
+            None => return Ok(()),
+        };
+
+        self.writeln(format!("✓ Selected provider: {}", provider_id))?;
+        Ok(())
+    }
+
     async fn active_workflow(&self) -> Result<Workflow> {
         // Read the current workflow to validate the agent
         let workflow = self.api.read_workflow(self.cli.workflow.as_deref()).await?;
@@ -394,6 +447,9 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
 
                 let output = format_tools(&tools);
                 self.writeln(output)?;
+            }
+            Command::Provider => {
+                self.on_provider_selection().await?;
             }
             Command::Update => {
                 on_update(self.api.clone(), None).await;

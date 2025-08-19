@@ -17,6 +17,16 @@ use crate::dto::{AppConfig, InitAuth, LoginInfo};
 use crate::user::{User, UserUsage};
 
 #[derive(Debug)]
+pub struct ProviderInfo {
+    pub id: String,
+    pub name: String,
+    pub provider_type: String,
+    pub base_url: Option<String>,
+    pub has_api_key: bool,
+    pub is_active: bool,
+}
+
+#[derive(Debug)]
 pub struct ShellOutput {
     pub output: CommandOutput,
     pub shell: String,
@@ -322,6 +332,7 @@ pub trait AuthService: Send + Sync {
 #[async_trait::async_trait]
 pub trait ProviderRegistry: Send + Sync {
     async fn get_provider(&self, config: AppConfig) -> anyhow::Result<Provider>;
+    async fn list_providers(&self, config: AppConfig) -> anyhow::Result<Vec<ProviderInfo>>;
 }
 
 #[async_trait::async_trait]
@@ -641,6 +652,9 @@ impl<I: Services> EnvironmentService for I {
 impl<I: Services> ProviderRegistry for I {
     async fn get_provider(&self, config: AppConfig) -> anyhow::Result<Provider> {
         self.provider_registry().get_provider(config).await
+    }
+    async fn list_providers(&self, config: AppConfig) -> anyhow::Result<Vec<ProviderInfo>> {
+        self.provider_registry().list_providers(config).await
     }
 }
 
