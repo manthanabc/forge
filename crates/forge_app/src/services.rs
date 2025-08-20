@@ -333,6 +333,7 @@ pub trait AuthService: Send + Sync {
 pub trait ProviderRegistry: Send + Sync {
     async fn get_provider(&self, config: AppConfig) -> anyhow::Result<Provider>;
     async fn list_providers(&self, config: AppConfig) -> anyhow::Result<Vec<ProviderInfo>>;
+    async fn clear_cache(&self);
 }
 
 #[async_trait::async_trait]
@@ -655,6 +656,9 @@ impl<I: Services> ProviderRegistry for I {
     }
     async fn list_providers(&self, config: AppConfig) -> anyhow::Result<Vec<ProviderInfo>> {
         self.provider_registry().list_providers(config).await
+    }
+    async fn clear_cache(&self) {
+        self.provider_registry().clear_cache().await
     }
 }
 

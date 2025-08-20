@@ -100,10 +100,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
         }
 
         // Find the currently active provider for cursor positioning
-        let starting_cursor = providers
-            .iter()
-            .position(|p| p.is_active)
-            .unwrap_or(0);
+        let starting_cursor = providers.iter().position(|p| p.is_active).unwrap_or(0);
 
         // Create a simple list of provider names
         let provider_names: Vec<String> = providers
@@ -137,6 +134,16 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             Some(id) => id,
             None => return Ok(()),
         };
+
+        // Set the active provider using the API
+        self.api.set_active_provider(provider_id.clone()).await?;
+
+        // Clear the provider cache to force reload with new configuration
+        self.api.clear_provider_cache().await?;
+
+        // Refresh the provider state to reflect the change
+        let provider = self.api.provider().await?;
+        self.state.provider = Some(provider);
 
         self.writeln(format!("✓ Selected provider: {}", provider_id))?;
         Ok(())
@@ -526,6 +533,8 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                         .and_then(|v| v.auth_provider_id)
                         .unwrap_or_default(),
                 );
+                // Clear provider cache after login to refresh authentication
+                self.api.clear_provider_cache().await?;
                 let provider = self.api.provider().await?;
                 self.state.provider = Some(provider);
             }

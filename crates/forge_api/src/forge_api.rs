@@ -190,4 +190,15 @@ impl<A: Services, F: CommandInfra> API for ForgeAPI<A, F> {
         let config = self.services.read_app_config().await.unwrap_or_default();
         self.services.list_providers(config).await
     }
+
+    async fn set_active_provider(&self, provider_name: String) -> anyhow::Result<()> {
+        let mut config = self.services.read_app_config().await.unwrap_or_default();
+        config.active_provider = Some(provider_name);
+        self.services.write_app_config(&config).await
+    }
+
+    async fn clear_provider_cache(&self) -> anyhow::Result<()> {
+        self.services.clear_cache().await;
+        Ok(())
+    }
 }

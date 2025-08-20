@@ -36,10 +36,7 @@ pub struct ForgeProviderRegistry<F> {
 
 impl<F: EnvironmentInfra> ForgeProviderRegistry<F> {
     pub fn new(infra: Arc<F>) -> Self {
-        Self {
-            infra,
-            cache: Arc::new(Default::default()),
-        }
+        Self { infra, cache: Arc::new(Default::default()) }
     }
 
     fn provider_url(&self) -> Option<ProviderUrl> {
@@ -59,26 +56,32 @@ impl<F: EnvironmentInfra> ForgeProviderRegistry<F> {
             return Some(override_url(provider, self.provider_url()));
         }
 
-        // If active provider present in app config
-        if let Some(active_id) = &forge_config.active_provider
-            && let Ok(provider) = self.load_provider_from_yaml(active_id) {
-                return Some(provider);
+        if let Some(active_id) = &forge_config.active_provider {
+            let providers = self.load_yaml().ok()?;
+            let def = providers.get(active_id)?;
+            let api_key = self.infra.get_env_var(&def.api_key_env)?;
+
+            let mut provider = match def.provider_type.as_str() {
+                "openai" => Provider::openai(&api_key),
+                "anthropic" => Provider::anthropic(&api_key),
+                _ => return resolve_env_provider(self.provider_url(), self.infra.as_ref()),
+            };
+
+            if let Some(base_url) = def.base_url.as_ref() {
+                match def.provider_type.as_str() {
+                    "openai" => provider.url(ProviderUrl::OpenAI(base_url.clone())),
+                    "anthropic" => provider.url(ProviderUrl::Anthropic(base_url.clone())),
+                    _ => {}
+                }
             }
+
+            return Some(provider);
+        }
 
         resolve_env_provider(self.provider_url(), self.infra.as_ref())
     }
 
-    fn load_provider_from_yaml(&self, provider_id: &str) -> anyhow::Result<Provider> {
-        let providers = self.load_providers_yaml()?;
-
-        let provider_def = providers.get(provider_id).ok_or_else(|| {
-            anyhow::anyhow!("Provider '{}' not found in providers.yaml", provider_id)
-        })?;
-
-        self.create_provider_from_def(provider_def)
-    }
-
-    fn load_providers_yaml(&self) -> anyhow::Result<HashMap<String, ProviderDefinition>> {
+    fn load_yaml(&self) -> anyhow::Result<HashMap<String, ProviderDefinition>> {
         let providers_path = self
             .infra
             .get_environment()
@@ -86,49 +89,12 @@ impl<F: EnvironmentInfra> ForgeProviderRegistry<F> {
             .join("providers.yaml");
 
         if !providers_path.exists() {
-            anyhow::bail!("providers.yaml not found at {}", providers_path.display());
+            anyhow::bail!("providers.yaml not found");
         }
 
-        let content = std::fs::read_to_string(&providers_path).with_context(|| {
-            format!(
-                "Failed to read providers.yaml from {}",
-                providers_path.display()
-            )
-        })?;
-
-        let config: ProvidersYaml = serde_yml::from_str(&content).with_context(|| {
-            format!(
-                "Failed to parse providers.yaml from {}",
-                providers_path.display()
-            )
-        })?;
-
+        let content = std::fs::read_to_string(&providers_path)?;
+        let config: ProvidersYaml = serde_yml::from_str(&content)?;
         Ok(config.providers)
-    }
-    fn create_provider_from_def(&self, def: &ProviderDefinition) -> anyhow::Result<Provider> {
-        let api_key = self.infra.get_env_var(&def.api_key_env).ok_or_else(|| {
-            anyhow::anyhow!(
-                "Environment variable '{}' not found for provider",
-                def.api_key_env
-            )
-        })?;
-
-        let mut provider = match def.provider_type.as_str() {
-            "openai" => Provider::openai(&api_key),
-            "anthropic" => Provider::anthropic(&api_key),
-            _ => anyhow::bail!("Unsupported provider type: {}", def.provider_type),
-        };
-
-        // Override URL if specified
-        if let Some(base_url) = &def.base_url {
-            match def.provider_type.as_str() {
-                "openai" => provider.url(ProviderUrl::OpenAI(base_url.clone())),
-                "anthropic" => provider.url(ProviderUrl::Anthropic(base_url.clone())),
-                _ => {}
-            }
-        }
-
-        Ok(provider)
     }
 }
 
@@ -148,18 +114,14 @@ impl<F: EnvironmentInfra> ProviderRegistry for ForgeProviderRegistry<F> {
 
     async fn list_providers(&self, config: AppConfig) -> anyhow::Result<Vec<ProviderInfo>> {
         // Try to load providers from YAML
-        let providers = match self.load_providers_yaml() {
+        let providers = match self.load_yaml() {
             Ok(providers) => providers,
-            Err(_) => {
-                // No providers.yaml file exists, return empty list
-                return Ok(Vec::new());
-            }
+            Err(_) => return Ok(Vec::new()),
         };
 
-        // Get active provider from config
         let active_provider_id = config.active_provider.as_ref();
-
         let mut provider_list = Vec::new();
+
         for (id, def) in providers {
             let has_api_key = self.infra.get_env_var(&def.api_key_env).is_some();
             let is_active = active_provider_id == Some(&id);
@@ -175,6 +137,10 @@ impl<F: EnvironmentInfra> ProviderRegistry for ForgeProviderRegistry<F> {
         }
 
         Ok(provider_list)
+    }
+
+    async fn clear_cache(&self) {
+        *self.cache.write().await = None;
     }
 }
 
