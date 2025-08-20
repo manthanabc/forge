@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fs;
 use std::sync::Arc;
 
 use anyhow::Context;
@@ -102,7 +103,19 @@ impl<F: EnvironmentInfra> ForgeProviderRegistry<F> {
             .join("providers.yaml");
 
         if !providers_path.exists() {
-            anyhow::bail!("providers.yaml not found");
+            const DEFAULT_CONFIG: &str = include_str!("../../../../providers.default.yaml");
+
+            println!(
+                "Configuration file not found. Created a default at: {}",
+                providers_path.display()
+            );
+
+            fs::write(&providers_path, DEFAULT_CONFIG).with_context(|| {
+                format!(
+                    "Failed to write default config to {}",
+                    providers_path.display()
+                )
+            })?;
         }
 
         let content = std::fs::read_to_string(&providers_path)?;
