@@ -199,6 +199,9 @@ impl<A: Services, F: CommandInfra> API for ForgeAPI<A, F> {
 
     async fn clear_provider_cache(&self) -> anyhow::Result<()> {
         self.services.clear_cache().await;
+
+        // also clear the model cache
+        self.services.clear_model_cache().await;
         Ok(())
     }
 }
