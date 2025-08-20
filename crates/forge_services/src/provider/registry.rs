@@ -10,8 +10,6 @@ use tokio::sync::RwLock;
 
 use crate::EnvironmentInfra;
 
-type ProviderSearch = (&'static str, Box<dyn FnOnce(&str) -> Provider>);
-
 #[derive(Deserialize, Clone)]
 struct ProvidersYaml {
     providers: HashMap<String, ProviderDefinition>,
@@ -43,8 +41,6 @@ impl<F: EnvironmentInfra> ForgeProviderRegistry<F> {
         if let Some(url) = self.infra.get_env_var("OPENAI_URL") {
             return Some(ProviderUrl::OpenAI(url));
         }
-
-        // Check for Anthropic URL override
         if let Some(url) = self.infra.get_env_var("ANTHROPIC_URL") {
             return Some(ProviderUrl::Anthropic(url));
         }
@@ -57,15 +53,16 @@ impl<F: EnvironmentInfra> ForgeProviderRegistry<F> {
             return Some(override_url(provider, self.provider_url()));
         }
 
+        let providers = self.load_yaml().ok()?;
+
         if let Some(active_id) = &forge_config.active_provider {
-            let providers = self.load_yaml().ok()?;
             let def = providers.get(active_id)?;
             let api_key = self.infra.get_env_var(&def.api_key_env)?;
 
             let mut provider = match def.provider_type.as_str() {
                 "openai" => Provider::openai(&api_key),
                 "anthropic" => Provider::anthropic(&api_key),
-                _ => return resolve_env_provider(self.provider_url(), self.infra.as_ref()),
+                _ => return None,
             };
 
             if let Some(base_url) = def.base_url.as_ref() {
@@ -75,10 +72,26 @@ impl<F: EnvironmentInfra> ForgeProviderRegistry<F> {
                     _ => {}
                 }
             }
-
             return Some(provider);
         }
-        resolve_env_provider(self.provider_url(), self.infra.as_ref())
+
+        providers.values().find_map(|def| {
+            let api_key = self.infra.get_env_var(&def.api_key_env)?;
+            let mut provider = match def.provider_type.as_str() {
+                "openai" => Provider::openai(&api_key),
+                "anthropic" => Provider::anthropic(&api_key),
+                _ => return None,
+            };
+
+            if let Some(base_url) = def.base_url.as_ref() {
+                match def.provider_type.as_str() {
+                    "openai" => provider.url(ProviderUrl::OpenAI(base_url.clone())),
+                    "anthropic" => provider.url(ProviderUrl::Anthropic(base_url.clone())),
+                    _ => {}
+                }
+            }
+            Some(provider)
+        })
     }
 
     fn load_yaml(&self) -> anyhow::Result<HashMap<String, ProviderDefinition>> {
@@ -105,15 +118,12 @@ impl<F: EnvironmentInfra> ProviderRegistry for ForgeProviderRegistry<F> {
             return Ok(provider.clone());
         }
 
-        let provider = self
-            .get_provider(config)
-            .context("No valid provider configuration found. Please set one of the following environment variables: OPENROUTER_API_KEY, REQUESTY_API_KEY, XAI_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY. For more details, visit: https://forgecode.dev/docs/custom-providers/")?;
+        let provider = self.get_provider(config).context("No valid provider configuration found. Please set one of the following environment variables: OPENROUTER_API_KEY, REQUESTY_API_KEY, XAI_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY.")?;
         self.cache.write().await.replace(provider.clone());
         Ok(provider)
     }
 
     async fn list_providers(&self, config: AppConfig) -> anyhow::Result<Vec<ProviderInfo>> {
-        // Try to load providers from YAML
         let providers = match self.load_yaml() {
             Ok(providers) => providers,
             Err(_) => return Ok(Vec::new()),
@@ -142,27 +152,6 @@ impl<F: EnvironmentInfra> ProviderRegistry for ForgeProviderRegistry<F> {
     async fn clear_cache(&self) {
         *self.cache.write().await = None;
     }
-}
-
-fn resolve_env_provider<F: EnvironmentInfra>(
-    url: Option<ProviderUrl>,
-    env: &F,
-) -> Option<Provider> {
-    let keys: [ProviderSearch; 5] = [
-        // ("FORGE_KEY", Box::new(Provider::forge)),
-        ("OPENROUTER_API_KEY", Box::new(Provider::open_router)),
-        ("REQUESTY_API_KEY", Box::new(Provider::requesty)),
-        ("XAI_API_KEY", Box::new(Provider::xai)),
-        ("OPENAI_API_KEY", Box::new(Provider::openai)),
-        ("ANTHROPIC_API_KEY", Box::new(Provider::anthropic)),
-    ];
-
-    keys.into_iter().find_map(|(key, fun)| {
-        env.get_env_var(key).map(|key| {
-            let provider = fun(&key);
-            override_url(provider, url.clone())
-        })
-    })
 }
 
 fn override_url(mut provider: Provider, url: Option<ProviderUrl>) -> Provider {

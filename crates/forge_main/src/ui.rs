@@ -7,7 +7,7 @@ use colored::Colorize;
 use convert_case::{Case, Casing};
 use forge_api::{
     API, AgentId, AppConfig, ChatRequest, ChatResponse, Conversation, ConversationId, Event,
-    InterruptionReason, Model, ModelId, Workflow,
+    InterruptionReason, Model, ModelId, ProviderInfo, Workflow,
 };
 use forge_display::{MarkdownFormat, TitleFormat};
 use forge_domain::{McpConfig, McpServerConfig, Provider, Scope};
@@ -99,34 +99,23 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             return Ok(None);
         }
 
+        let cli_providers: Vec<CliProvider> = providers.into_iter().map(CliProvider).collect();
+
         // Find the currently active provider for cursor positioning
-        let starting_cursor = providers.iter().position(|p| p.is_active).unwrap_or(0);
-
-        // Create a simple list of provider names
-        let provider_names: Vec<String> = providers
+        let starting_cursor = cli_providers
             .iter()
-            .map(|provider| provider.name.clone())
-            .collect();
+            .position(|p| p.0.is_active)
+            .unwrap_or(0);
 
-        // Use the centralized select module
-        match ForgeSelect::select("Select a provider:", provider_names)
+        match ForgeSelect::select("Select a provider:", cli_providers)
             .with_starting_cursor(starting_cursor)
-            .with_help_message("Type a name or use arrow keys to navigate and Enter to select")
             .prompt()?
         {
-            Some(selected_name) => {
-                // Find the provider ID by name
-                let provider_id = providers
-                    .iter()
-                    .find(|p| p.name == selected_name)
-                    .map(|p| p.id.clone());
-                Ok(provider_id)
-            }
+            Some(selected_provider) => Ok(Some(selected_provider.0.id)),
             None => Ok(None),
         }
     }
 
-    // Helper method to handle provider selection and update the configuration
     async fn on_provider_selection(&mut self) -> Result<()> {
         let provider_option = self.select_provider().await?;
 
@@ -135,10 +124,10 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             None => return Ok(()),
         };
 
-        // Set the active provider using the API
+        // Set the active provider
         self.api.set_active_provider(provider_id.clone()).await?;
 
-        // Clear the provider cache to force reload with new configuration
+        // Clear the cache
         self.api.clear_provider_cache().await?;
 
         // Refresh the provider state to reflect the change
@@ -533,8 +522,6 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                         .and_then(|v| v.auth_provider_id)
                         .unwrap_or_default(),
                 );
-                // Clear provider cache after login to refresh authentication
-                self.api.clear_provider_cache().await?;
                 let provider = self.api.provider().await?;
                 self.state.provider = Some(provider);
             }
@@ -967,6 +954,20 @@ fn parse_env(env: Vec<String>) -> BTreeMap<String, String> {
             }
         })
         .collect()
+}
+
+struct CliProvider(ProviderInfo);
+
+impl Display for CliProvider {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let provider = &self.0;
+        let (status_icon, name) = if provider.has_api_key {
+            ("✓".green(), provider.name.clone().normal())
+        } else {
+            ("✗".red(), provider.name.clone().dimmed())
+        };
+        write!(f, "{} {}", status_icon, name)
+    }
 }
 
 struct CliModel(Model);
