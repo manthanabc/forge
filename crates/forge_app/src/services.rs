@@ -16,14 +16,12 @@ use crate::Walker;
 use crate::dto::{AppConfig, InitAuth, LoginInfo};
 use crate::user::{User, UserUsage};
 
-#[derive(Debug)]
-pub struct ProviderInfo {
-    pub id: String,
+#[derive(Debug, Clone)]
+pub struct Profile {
     pub name: String,
-    pub provider_type: String,
-    pub base_url: Option<String>,
-    pub has_api_key: bool,
+    pub provider: String,
     pub is_active: bool,
+    pub model_name: Option<String>,
 }
 
 #[derive(Debug)]
@@ -333,7 +331,7 @@ pub trait AuthService: Send + Sync {
 #[async_trait::async_trait]
 pub trait ProviderRegistry: Send + Sync {
     async fn get_provider(&self, config: AppConfig) -> anyhow::Result<Provider>;
-    async fn list_providers(&self, config: AppConfig) -> anyhow::Result<Vec<ProviderInfo>>;
+    async fn list_profiles(&self, config: AppConfig) -> anyhow::Result<Vec<Profile>>;
     async fn clear_cache(&self);
 }
 
@@ -658,8 +656,8 @@ impl<I: Services> ProviderRegistry for I {
     async fn get_provider(&self, config: AppConfig) -> anyhow::Result<Provider> {
         self.provider_registry().get_provider(config).await
     }
-    async fn list_providers(&self, config: AppConfig) -> anyhow::Result<Vec<ProviderInfo>> {
-        self.provider_registry().list_providers(config).await
+    async fn list_profiles(&self, config: AppConfig) -> anyhow::Result<Vec<Profile>> {
+        self.provider_registry().list_profiles(config).await
     }
     async fn clear_cache(&self) {
         self.provider_registry().clear_cache().await

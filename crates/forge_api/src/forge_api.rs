@@ -5,7 +5,7 @@ use anyhow::{Context, Result};
 use forge_app::dto::{AppConfig, InitAuth};
 use forge_app::{
     AppConfigService, AuthService, ConversationService, EnvironmentService, FileDiscoveryService,
-    ForgeApp, McpConfigManager, ProviderInfo, ProviderRegistry, ProviderService, Services, User,
+    ForgeApp, McpConfigManager, Profile, ProviderRegistry, ProviderService, Services, User,
     UserUsage, Walker, WorkflowService,
 };
 use forge_domain::*;
@@ -186,18 +186,18 @@ impl<A: Services, F: CommandInfra> API for ForgeAPI<A, F> {
         }
         Ok(None)
     }
-    async fn list_providers(&self) -> anyhow::Result<Vec<ProviderInfo>> {
+    async fn list_profiles(&self) -> anyhow::Result<Vec<Profile>> {
         let config = self.services.read_app_config().await.unwrap_or_default();
-        self.services.list_providers(config).await
+        self.services.list_profiles(config).await
     }
 
-    async fn set_active_provider(&self, provider_name: String) -> anyhow::Result<()> {
+    async fn set_active_profile(&self, profile_name: String) -> anyhow::Result<()> {
         let mut config = self.services.read_app_config().await.unwrap_or_default();
-        config.active_provider = Some(provider_name);
+        config.active_provider = Some(profile_name);
         self.services.write_app_config(&config).await
     }
 
-    async fn clear_provider_cache(&self) -> anyhow::Result<()> {
+    async fn clear_profile_cache(&self) -> anyhow::Result<()> {
         self.services.clear_cache().await;
 
         // also clear the model cache

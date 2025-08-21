@@ -1,29 +1,22 @@
-use std::collections::HashMap;
 use std::fs;
 use std::sync::Arc;
 
 use anyhow::Context;
 use forge_app::domain::{Provider, ProviderUrl};
 use forge_app::dto::AppConfig;
-use forge_app::{ProviderInfo, ProviderRegistry};
+use forge_app::{Profile, ProviderRegistry};
 use serde::Deserialize;
 use tokio::sync::RwLock;
 
 use crate::EnvironmentInfra;
 
 #[derive(Deserialize, Clone)]
-struct ProvidersYaml {
-    providers: HashMap<String, ProviderDefinition>,
-}
-
-#[derive(Deserialize, Clone)]
-struct ProviderDefinition {
+struct ProfileConfig {
     name: String,
-    #[serde(rename = "type")]
-    provider_type: String,
-    #[serde(default)]
+    provider: String,
+    api_key: String,
+    model: Option<String>,
     base_url: Option<String>,
-    api_key_env: String,
 }
 
 pub struct ForgeProviderRegistry<F> {
@@ -57,53 +50,61 @@ impl<F: EnvironmentInfra> ForgeProviderRegistry<F> {
         let providers = self.load_yaml().ok()?;
 
         if let Some(active_id) = &forge_config.active_provider {
-            let def = providers.get(active_id)?;
-            let api_key = self.infra.get_env_var(&def.api_key_env)?;
-
-            let mut provider = match def.provider_type.as_str() {
+            let def = providers.iter().find(|p| p.name == *active_id)?;
+            let api_key = def.api_key.clone();
+            let mut provider = match def.provider.as_str() {
                 "openai" => Provider::openai(&api_key),
                 "anthropic" => Provider::anthropic(&api_key),
+                "xai" => Provider::xai(&api_key),
+                "openrouter" => Provider::open_router(&api_key),
+                "requesty" => Provider::requesty(&api_key),
                 _ => return None,
             };
 
-            if let Some(base_url) = def.base_url.as_ref() {
-                match def.provider_type.as_str() {
-                    "openai" => provider.url(ProviderUrl::OpenAI(base_url.clone())),
-                    "anthropic" => provider.url(ProviderUrl::Anthropic(base_url.clone())),
-                    _ => {}
-                }
+            if let Some(base_url) = &def.base_url {
+                let url = match def.provider.as_str() {
+                    "openai" | "xai" | "openrouter" | "requesty" => {
+                        ProviderUrl::OpenAI(base_url.clone())
+                    }
+                    "anthropic" => ProviderUrl::Anthropic(base_url.clone()),
+                    _ => return None,
+                };
+                provider.url(url);
             }
+
             return Some(provider);
         }
-
-        providers.values().find_map(|def| {
-            let api_key = self.infra.get_env_var(&def.api_key_env)?;
-            let mut provider = match def.provider_type.as_str() {
+        providers.iter().find_map(|def| {
+            let api_key = def.api_key.clone();
+            let mut provider = match def.provider.as_str() {
                 "openai" => Provider::openai(&api_key),
                 "anthropic" => Provider::anthropic(&api_key),
+                "xai" => Provider::xai(&api_key),
+                "openrouter" => Provider::open_router(&api_key),
+                "requesty" => Provider::requesty(&api_key),
                 _ => return None,
             };
 
-            if let Some(base_url) = def.base_url.as_ref() {
-                match def.provider_type.as_str() {
-                    "openai" => provider.url(ProviderUrl::OpenAI(base_url.clone())),
-                    "anthropic" => provider.url(ProviderUrl::Anthropic(base_url.clone())),
-                    _ => {}
-                }
+            if let Some(base_url) = &def.base_url {
+                let url = match def.provider.as_str() {
+                    "openai" | "xai" | "openrouter" | "requesty" => {
+                        ProviderUrl::OpenAI(base_url.clone())
+                    }
+                    "anthropic" => ProviderUrl::Anthropic(base_url.clone()),
+                    _ => return None,
+                };
+                provider.url(url);
             }
+
             Some(provider)
         })
     }
 
-    fn load_yaml(&self) -> anyhow::Result<HashMap<String, ProviderDefinition>> {
-        let providers_path = self
-            .infra
-            .get_environment()
-            .base_path
-            .join("providers.yaml");
+    fn load_yaml(&self) -> anyhow::Result<Vec<ProfileConfig>> {
+        let providers_path = self.infra.get_environment().base_path.join("profiles.yaml");
 
         if !providers_path.exists() {
-            const DEFAULT_CONFIG: &str = include_str!("../../../../providers.default.yaml");
+            const DEFAULT_CONFIG: &str = include_str!("../../../../profiles.default.yaml");
 
             println!(
                 "Configuration file not found. Created a default at: {}",
@@ -119,8 +120,8 @@ impl<F: EnvironmentInfra> ForgeProviderRegistry<F> {
         }
 
         let content = std::fs::read_to_string(&providers_path)?;
-        let config: ProvidersYaml = serde_yml::from_str(&content)?;
-        Ok(config.providers)
+        let profiles: Vec<ProfileConfig> = serde_yml::from_str(&content)?;
+        Ok(profiles)
     }
 }
 
@@ -131,35 +132,32 @@ impl<F: EnvironmentInfra> ProviderRegistry for ForgeProviderRegistry<F> {
             return Ok(provider.clone());
         }
 
-        let provider = self.get_provider(config).context("No valid provider configuration found. Please set one of the following environment variables: OPENROUTER_API_KEY, REQUESTY_API_KEY, XAI_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY.")?;
+        let provider = self.get_provider(config).context("No valid provider configuration found. Please configure a profile in your `profiles.yaml` file.")?;
         self.cache.write().await.replace(provider.clone());
         Ok(provider)
     }
 
-    async fn list_providers(&self, config: AppConfig) -> anyhow::Result<Vec<ProviderInfo>> {
-        let providers = match self.load_yaml() {
-            Ok(providers) => providers,
+    async fn list_profiles(&self, config: AppConfig) -> anyhow::Result<Vec<Profile>> {
+        let profiles = match self.load_yaml() {
+            Ok(profiles) => profiles,
             Err(_) => return Ok(Vec::new()),
         };
 
         let active_provider_id = config.active_provider.as_ref();
-        let mut provider_list = Vec::new();
+        let mut profile_list = Vec::new();
 
-        for (id, def) in providers {
-            let has_api_key = self.infra.get_env_var(&def.api_key_env).is_some();
-            let is_active = active_provider_id == Some(&id);
+        for def in profiles {
+            let is_active = active_provider_id == Some(&def.name);
 
-            provider_list.push(ProviderInfo {
-                id: id.clone(),
-                name: def.name,
-                provider_type: def.provider_type,
-                base_url: def.base_url,
-                has_api_key,
+            profile_list.push(forge_app::Profile {
+                name: def.name.clone(),
+                provider: def.provider,
                 is_active,
+                model_name: def.model,
             });
         }
 
-        Ok(provider_list)
+        Ok(profile_list)
     }
 
     async fn clear_cache(&self) {
