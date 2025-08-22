@@ -1,26 +1,25 @@
 use std::path::{Path, PathBuf};
-use std::pin::Pin;
 use std::process::ExitStatus;
 use std::sync::Arc;
 
 use bytes::Bytes;
-use forge_app::ServerSentEvent;
 use forge_domain::{CommandOutput, Environment, McpServerConfig};
 use forge_fs::FileInfo as FileInfoData;
 use forge_services::{
-    CommandInfra, EnvironmentInfra, FileDirectoryInfra, FileInfoInfra, FileReaderInfra,
-    FileRemoverInfra, FileWriterInfra, HttpInfra, McpServerInfra, SnapshotInfra, UserInfra,
-    WalkerInfra,
+    CommandInfra, DirectoryReaderInfra, EnvironmentInfra, FileDirectoryInfra, FileInfoInfra,
+    FileReaderInfra, FileRemoverInfra, FileWriterInfra, HttpInfra, McpServerInfra, SnapshotInfra,
+    UserInfra, WalkerInfra,
 };
 use reqwest::header::HeaderMap;
 use reqwest::{Response, Url};
-use tokio_stream::Stream;
+use reqwest_eventsource::EventSource;
 
 use crate::env::ForgeEnvironmentInfra;
 use crate::executor::ForgeCommandExecutorService;
 use crate::fs_create_dirs::ForgeCreateDirsService;
 use crate::fs_meta::ForgeFileMetaService;
 use crate::fs_read::ForgeFileReadService;
+use crate::fs_read_dir::ForgeDirectoryReaderService;
 use crate::fs_remove::ForgeFileRemoveService;
 use crate::fs_snap::ForgeFileSnapshotService;
 use crate::fs_write::ForgeFileWriteService;
@@ -41,6 +40,7 @@ pub struct ForgeInfra {
     file_meta_service: Arc<ForgeFileMetaService>,
     file_remove_service: Arc<ForgeFileRemoveService<ForgeFileSnapshotService>>,
     create_dirs_service: Arc<ForgeCreateDirsService>,
+    directory_reader_service: Arc<ForgeDirectoryReaderService>,
     command_executor_service: Arc<ForgeCommandExecutorService>,
     inquire_service: Arc<ForgeInquire>,
     mcp_server: ForgeMcpServer,
@@ -64,6 +64,7 @@ impl ForgeInfra {
             environment_service,
             file_snapshot_service,
             create_dirs_service: Arc::new(ForgeCreateDirsService),
+            directory_reader_service: Arc::new(ForgeDirectoryReaderService),
             command_executor_service: Arc::new(ForgeCommandExecutorService::new(
                 restricted,
                 env.clone(),
@@ -178,9 +179,10 @@ impl CommandInfra for ForgeInfra {
         &self,
         command: String,
         working_dir: PathBuf,
+        silent: bool,
     ) -> anyhow::Result<CommandOutput> {
         self.command_executor_service
-            .execute_command(command, working_dir)
+            .execute_command(command, working_dir, silent)
             .await
     }
 
@@ -201,19 +203,19 @@ impl UserInfra for ForgeInfra {
         self.inquire_service.prompt_question(question).await
     }
 
-    async fn select_one(
+    async fn select_one<T: std::fmt::Display + Send + 'static>(
         &self,
         message: &str,
-        options: Vec<String>,
-    ) -> anyhow::Result<Option<String>> {
+        options: Vec<T>,
+    ) -> anyhow::Result<Option<T>> {
         self.inquire_service.select_one(message, options).await
     }
 
-    async fn select_many(
+    async fn select_many<T: std::fmt::Display + Clone + Send + 'static>(
         &self,
         message: &str,
-        options: Vec<String>,
-    ) -> anyhow::Result<Option<Vec<String>>> {
+        options: Vec<T>,
+    ) -> anyhow::Result<Option<Vec<T>>> {
         self.inquire_service.select_many(message, options).await
     }
 }
@@ -252,7 +254,19 @@ impl HttpInfra for ForgeInfra {
         url: &Url,
         headers: Option<HeaderMap>,
         body: Bytes,
-    ) -> anyhow::Result<Pin<Box<dyn Stream<Item = anyhow::Result<ServerSentEvent>> + Send>>> {
+    ) -> anyhow::Result<EventSource> {
         self.http_service.eventsource(url, headers, body).await
+    }
+}
+#[async_trait::async_trait]
+impl DirectoryReaderInfra for ForgeInfra {
+    async fn read_directory_files(
+        &self,
+        directory: &Path,
+        pattern: Option<&str>,
+    ) -> anyhow::Result<Vec<(PathBuf, String)>> {
+        self.directory_reader_service
+            .read_directory_files(directory, pattern)
+            .await
     }
 }

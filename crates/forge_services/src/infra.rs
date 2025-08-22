@@ -1,16 +1,15 @@
 use std::path::{Path, PathBuf};
-use std::pin::Pin;
 
 use anyhow::Result;
 use bytes::Bytes;
 use forge_app::domain::{
     CommandOutput, Environment, McpServerConfig, ToolDefinition, ToolName, ToolOutput,
 };
-use forge_app::{ServerSentEvent, WalkedFile, Walker};
+use forge_app::{WalkedFile, Walker};
 use forge_snaps::Snapshot;
-use futures::Stream;
 use reqwest::Response;
 use reqwest::header::HeaderMap;
+use reqwest_eventsource::EventSource;
 use url::Url;
 
 pub trait EnvironmentInfra: Send + Sync {
@@ -114,6 +113,7 @@ pub trait CommandInfra: Send + Sync {
         &self,
         command: String,
         working_dir: PathBuf,
+        silent: bool,
     ) -> anyhow::Result<CommandOutput>;
 
     /// execute the shell command on present stdio.
@@ -132,19 +132,31 @@ pub trait UserInfra: Send + Sync {
 
     /// Prompts the user to select a single option from a list
     /// Returns None if the user interrupts the selection
-    async fn select_one(
+    async fn select_one<T: std::fmt::Display + Send + 'static>(
         &self,
         message: &str,
-        options: Vec<String>,
-    ) -> anyhow::Result<Option<String>>;
+        options: Vec<T>,
+    ) -> anyhow::Result<Option<T>>;
+
+    /// Prompts the user to select a single option from an enum that implements
+    /// IntoEnumIterator Returns None if the user interrupts the selection
+    async fn select_one_enum<T>(&self, message: &str) -> anyhow::Result<Option<T>>
+    where
+        T: std::fmt::Display + Send + 'static + strum::IntoEnumIterator + std::str::FromStr,
+        <T as std::str::FromStr>::Err: std::fmt::Debug,
+    {
+        let options: Vec<T> = T::iter().collect();
+        let selected = self.select_one(message, options).await?;
+        Ok(selected)
+    }
 
     /// Prompts the user to select multiple options from a list
     /// Returns None if the user interrupts the selection
-    async fn select_many(
+    async fn select_many<T: std::fmt::Display + Clone + Send + 'static>(
         &self,
         message: &str,
-        options: Vec<String>,
-    ) -> anyhow::Result<Option<Vec<String>>>;
+        options: Vec<T>,
+    ) -> anyhow::Result<Option<Vec<T>>>;
 }
 
 #[async_trait::async_trait]
@@ -183,5 +195,17 @@ pub trait HttpInfra: Send + Sync + 'static {
         url: &Url,
         headers: Option<HeaderMap>,
         body: Bytes,
-    ) -> anyhow::Result<Pin<Box<dyn Stream<Item = anyhow::Result<ServerSentEvent>> + Send>>>;
+    ) -> anyhow::Result<EventSource>;
+}
+/// Service for reading multiple files from a directory asynchronously
+#[async_trait::async_trait]
+pub trait DirectoryReaderInfra: Send + Sync {
+    /// Reads all files in a directory that match the given filter pattern
+    /// Returns a vector of tuples containing (file_path, file_content)
+    /// Files are read asynchronously/in parallel for better performance
+    async fn read_directory_files(
+        &self,
+        directory: &Path,
+        pattern: Option<&str>, // Optional glob pattern like "*.md"
+    ) -> anyhow::Result<Vec<(PathBuf, String)>>;
 }
