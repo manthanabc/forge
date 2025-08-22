@@ -1,0 +1,11 @@
+# Profiles
+#
+
+- name: Default
+  provider: "openai"
+  model: "gpt-5"
+
+- name: OpenRouter
+  provider: "openrouter"
+  api_key: "--------"
+

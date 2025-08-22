@@ -127,9 +127,6 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
         // Set the active provider
         self.api.set_active_profile(provider_id.clone()).await?;
 
-        // Clear the cache
-        self.api.clear_profile_cache().await?;
-
         // Refresh the provider state to reflect the change
         let provider = self.api.provider().await?;
         self.state.provider = Some(provider);
@@ -140,8 +137,9 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 let model_id = ModelId::new(model_name.clone());
                 self.update_model_state(
                     model_id,
-                    format!("Selected profile: {} (model: {})", provider_id, model_name)
-                ).await?;
+                    format!("Selected profile: {} (model: {})", provider_id, model_name),
+                )
+                .await?;
             } else {
                 self.writeln(format!("✓ Selected profile: {}", provider_id))?;
             }
@@ -602,7 +600,11 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
     }
 
     // Helper method to update model in workflow, conversation, and UI state
-    async fn update_model_state(&mut self, model_id: ModelId, success_message: String) -> Result<()> {
+    async fn update_model_state(
+        &mut self,
+        model_id: ModelId,
+        success_message: String,
+    ) -> Result<()> {
         // Update the workflow with the new model
         self.api
             .update_workflow(self.cli.workflow.as_deref(), |workflow| {
@@ -640,7 +642,8 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             None => return Ok(()),
         };
 
-        self.update_model_state(model.clone(), format!("Switched to model: {model}")).await
+        self.update_model_state(model.clone(), format!("Switched to model: {model}"))
+            .await
     }
 
     // Handle dispatching events from the CLI

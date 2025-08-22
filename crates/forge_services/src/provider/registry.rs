@@ -31,22 +31,7 @@ impl<F: EnvironmentInfra> ForgeProviderRegistry<F> {
         Self { infra, cache: Arc::new(Default::default()) }
     }
 
-    fn provider_url(&self) -> Option<ProviderUrl> {
-        if let Some(url) = self.infra.get_env_var("OPENAI_URL") {
-            return Some(ProviderUrl::OpenAI(url));
-        }
-        if let Some(url) = self.infra.get_env_var("ANTHROPIC_URL") {
-            return Some(ProviderUrl::Anthropic(url));
-        }
-        None
-    }
-
     fn get_provider(&self, forge_config: AppConfig) -> Option<Provider> {
-        if let Some(forge_key) = &forge_config.key_info {
-            let provider = Provider::forge(forge_key.api_key.as_str());
-            return Some(override_url(provider, self.provider_url()));
-        }
-
         let providers = self.load_yaml().ok()?;
 
         if let Some(active_id) = &forge_config.active_provider {
@@ -160,14 +145,7 @@ impl<F: EnvironmentInfra> ProviderRegistry for ForgeProviderRegistry<F> {
         Ok(profile_list)
     }
 
-    async fn clear_cache(&self) {
+    async fn clear_provider_cache(&self) {
         *self.cache.write().await = None;
     }
-}
-
-fn override_url(mut provider: Provider, url: Option<ProviderUrl>) -> Provider {
-    if let Some(url) = url {
-        provider.url(url);
-    }
-    provider
 }

@@ -102,5 +102,4 @@ pub trait API: Sync + Send {
     async fn user_usage(&self) -> anyhow::Result<Option<UserUsage>>;
     async fn list_profiles(&self) -> anyhow::Result<Vec<Profile>>;
     async fn set_active_profile(&self, profile_name: String) -> anyhow::Result<()>;
-    async fn clear_profile_cache(&self) -> anyhow::Result<()>;
 }
