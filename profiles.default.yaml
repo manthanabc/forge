@@ -1,11 +1,8 @@
-# Profiles
-#
+# If 'api_key' is omitted, it will be loaded from the corresponding environment variable.
+# For example, for the 'openai' provider, set OPENAI_API_KEY.
 
 - name: Default
-  provider: "openai"
-  model: "gpt-5"
+  model: "gpt-4"
 
 - name: OpenRouter
   provider: "openrouter"
-  api_key: "--------"
-
