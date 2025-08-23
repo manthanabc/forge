@@ -30,10 +30,7 @@ pub struct ForgeProviderRegistry<F> {
 
 impl<F: EnvironmentInfra> ForgeProviderRegistry<F> {
     pub fn new(infra: Arc<F>) -> Self {
-        Self {
-            infra,
-            cache: Arc::new(Default::default()),
-        }
+        Self { infra, cache: Arc::new(Default::default()) }
     }
 
     fn provider_url(&self) -> Option<ProviderUrl> {
@@ -48,21 +45,26 @@ impl<F: EnvironmentInfra> ForgeProviderRegistry<F> {
     }
 
     fn get_provider(&self, forge_config: AppConfig) -> Option<Provider> {
-        if let Ok(providers) = self.load_yaml() {
-            if let Some(active_id) = &forge_config.active_provider {
-                if let Some(def) = providers.iter().find(|p| p.name == *active_id) {
-                    if let Some(provider) = self.config_to_provider(def) {
-                        return Some(provider);
-                    }
-                }
-            }
+        let providers = self.load_yaml().ok()?;
 
-            if let Some(provider) = providers.iter().find_map(|def| self.config_to_provider(def)) {
-                return Some(provider);
-            }
+        // First, try to find the explicitly active provider
+        let active_provider = forge_config.active_provider.and_then(|active_id| {
+            providers
+                .iter()
+                .find(|p| p.name == active_id)
+                .and_then(|def| self.config_to_provider(def))
+        });
+
+        if active_provider.is_some() {
+            return active_provider;
         }
 
-        resolve_env_provider(self.provider_url(), self.infra.as_ref())
+        // If no active provider, try to find the first one that can be configured
+        // otherwise fallback to env provider
+        providers
+            .iter()
+            .find_map(|def| self.config_to_provider(def))
+            .or_else(|| resolve_env_provider(self.provider_url(), self.infra.as_ref()))
     }
 
     fn config_to_provider(&self, def: &ProfileConfig) -> Option<Provider> {
@@ -112,9 +114,15 @@ impl<F: EnvironmentInfra> ForgeProviderRegistry<F> {
 
         if !profile_path.exists() {
             const DEFAULT_CONFIG: &str = include_str!("../../../../profiles.default.yaml");
-            println!("Configuration file not found. Created a default at: {}", profile_path.display());
+            println!(
+                "Configuration file not found. Created a default at: {}",
+                profile_path.display()
+            );
             fs::write(&profile_path, DEFAULT_CONFIG).with_context(|| {
-                format!("Failed to write default config to {}", profile_path.display())
+                format!(
+                    "Failed to write default config to {}",
+                    profile_path.display()
+                )
             })?;
         }
 

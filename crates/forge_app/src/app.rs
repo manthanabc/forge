@@ -202,7 +202,6 @@ impl<S: Services> ForgeApp<S> {
     pub async fn list_tools(&self) -> Result<Vec<ToolDefinition>> {
         self.tool_registry.list().await
     }
-
     pub async fn login(&self, init_auth: &InitAuth) -> Result<()> {
         self.authenticator.login(init_auth).await
     }

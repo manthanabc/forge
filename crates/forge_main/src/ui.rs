@@ -132,20 +132,12 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
         self.state.provider = Some(provider);
 
         // Load the default model from the profile if specified
-        if let Some(profile) = selected_profile {
-            if let Some(model_name) = &profile.model_name {
-                let model_id = ModelId::new(model_name.clone());
-                self.update_model_state(
-                    model_id,
-                    format!("Selected profile: {} (model: {})", provider_id, model_name),
-                )
+
+        if let Some(model_name) = selected_profile.and_then(|p| p.model_name.as_ref()) {
+            self.update_model_state(ModelId::new(model_name.clone()))
                 .await?;
-            } else {
-                self.writeln(format!("✓ Selected profile: {}", provider_id))?;
-            }
-        } else {
-            self.writeln(format!("✓ Selected profile: {}", provider_id))?;
         }
+        self.writeln(format!("✓ Selected profile: {}", provider_id))?;
 
         Ok(())
     }
@@ -599,38 +591,6 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
         }
     }
 
-    // Helper method to update model in workflow, conversation, and UI state
-    async fn update_model_state(
-        &mut self,
-        model_id: ModelId,
-        success_message: String,
-    ) -> Result<()> {
-        // Update the workflow with the new model
-        self.api
-            .update_workflow(self.cli.workflow.as_deref(), |workflow| {
-                workflow.model = Some(model_id.clone());
-            })
-            .await?;
-
-        // Get the conversation to update
-        let conversation_id = self.init_conversation().await?;
-
-        if let Some(mut conversation) = self.api.conversation(&conversation_id).await? {
-            // Update the model in the conversation
-            conversation.set_model(&model_id)?;
-
-            // Upsert the updated conversation
-            self.api.upsert_conversation(conversation).await?;
-
-            // Update the UI state with the new model
-            self.update_model(model_id.clone());
-
-            self.writeln(TitleFormat::action(success_message))?;
-        }
-
-        Ok(())
-    }
-
     // Helper method to handle model selection and update the conversation
     async fn on_model_selection(&mut self) -> Result<()> {
         // Select a model
@@ -641,9 +601,36 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             Some(model) => model,
             None => return Ok(()),
         };
+        self.writeln(format!("Switched to model: {model}"))?;
+        self.update_model_state(model.clone()).await
+    }
 
-        self.update_model_state(model.clone(), format!("Switched to model: {model}"))
-            .await
+    // Helper method to update model in workflow, conversation, and UI state
+    async fn update_model_state(&mut self, model: ModelId) -> Result<()> {
+        // Update the workflow with the new model
+        self.api
+            .update_workflow(self.cli.workflow.as_deref(), |workflow| {
+                workflow.model = Some(model.clone());
+            })
+            .await?;
+
+        // Get the conversation to update
+        let conversation_id = self.init_conversation().await?;
+
+        if let Some(mut conversation) = self.api.conversation(&conversation_id).await? {
+            // Update the model in the conversation
+            conversation.set_model(&model)?;
+
+            // Upsert the updated conversation
+            self.api.upsert_conversation(conversation).await?;
+
+            // Update the UI state with the new model
+            self.update_model(model.clone());
+
+            self.writeln(TitleFormat::action(format!("Switched to model: {model}")))?;
+        }
+
+        Ok(())
     }
 
     // Handle dispatching events from the CLI
@@ -713,9 +700,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             .await?;
 
         self.command.register_all(&base_workflow);
-        let mut state = UIState::new(self.api.environment(), base_workflow);
-        state.provider = Some(provider);
-        self.state = state;
+        self.state = UIState::new(self.api.environment(), base_workflow).provider(provider);
 
         Ok(workflow)
     }

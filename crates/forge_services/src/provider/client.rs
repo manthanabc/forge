@@ -181,7 +181,6 @@ pub fn create_headers(headers: Vec<(String, String)>) -> HeaderMap {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
     use std::sync::Arc;
 
     use bytes::Bytes;
