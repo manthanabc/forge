@@ -75,12 +75,14 @@ impl<F: EnvironmentInfra> ForgeProviderRegistry<F> {
             "xai" => Provider::xai(&api_key),
             "openrouter" => Provider::open_router(&api_key),
             "requesty" => Provider::requesty(&api_key),
+            "zai" => Provider::zai(&api_key),
+            "cerebras" => Provider::cerebras(&api_key),
             _ => return None,
         };
 
         if let Some(base_url) = &def.base_url {
             let url = match def.provider.as_str() {
-                "openai" | "xai" | "openrouter" | "requesty" => {
+                "openai" | "xai" | "openrouter" | "requesty" | "zai" | "cerebras" => {
                     ProviderUrl::OpenAI(base_url.clone())
                 }
                 "anthropic" => ProviderUrl::Anthropic(base_url.clone()),
@@ -103,6 +105,8 @@ impl<F: EnvironmentInfra> ForgeProviderRegistry<F> {
             "xai" => "XAI_API_KEY",
             "openrouter" => "OPENROUTER_API_KEY",
             "requesty" => "REQUESTY_API_KEY",
+            "zai" => "ZAI_API_KEY",
+            "cerebras" => "CEREBRAS_API_KEY",
             _ => return None,
         };
 
@@ -127,7 +131,26 @@ impl<F: EnvironmentInfra> ForgeProviderRegistry<F> {
         }
 
         let content = std::fs::read_to_string(&profile_path)?;
-        let profiles: Vec<ProfileConfig> = serde_yml::from_str(&content)?;
+        let profiles: Vec<ProfileConfig> = match serde_yml::from_str(&content) {
+            Ok(profiles) => profiles,
+            Err(_) => {
+                // If parsing fails, it might be an incompatible format. Replace with default.
+                const DEFAULT_CONFIG: &str = include_str!("../../../../profiles.default.yaml");
+                println!(
+                    "Incompatible profiles.yaml format detected. Recreating with default configuration at: {}",
+                    profile_path.display()
+                );
+                fs::write(&profile_path, DEFAULT_CONFIG).with_context(|| {
+                    format!(
+                        "Failed to write default config to {}",
+                        profile_path.display()
+                    )
+                })?;
+
+                // Parse the newly written default content
+                serde_yml::from_str(DEFAULT_CONFIG)?
+            }
+        };
         Ok(profiles)
     }
 }
@@ -145,10 +168,7 @@ impl<F: EnvironmentInfra> ProviderRegistry for ForgeProviderRegistry<F> {
     }
 
     async fn list_profiles(&self, config: AppConfig) -> anyhow::Result<Vec<Profile>> {
-        let profiles = match self.load_yaml() {
-            Ok(profiles) => profiles,
-            Err(_) => return Ok(Vec::new()),
-        };
+        let profiles = self.load_yaml()?;
 
         let active_provider_id = config.active_provider.as_ref();
         let mut profile_list = Vec::new();

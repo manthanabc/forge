@@ -145,7 +145,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             self.update_model_state(ModelId::new(model_name.clone()))
                 .await?;
         }
-        self.writeln(format!("✓ Selected profile: {}", provider_id))?;
+        self.writeln(format!("✓ Selected profile: {provider_id}"))?;
 
         Ok(())
     }
