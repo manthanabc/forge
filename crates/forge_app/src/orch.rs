@@ -646,10 +646,9 @@ impl<S: AgentService> Orchestrator<S> {
         tool_context.with_metrics(|metrics| {
             self.conversation.metrics = metrics.clone();
         })?;
-
+        // Signal Task Completion
         if has_attempted_completion {
-            self.send(ChatResponse::TaskComplete { metrics: self.conversation.metrics.clone() })
-                .await?;
+            self.send(ChatResponse::TaskComplete).await?;
         }
 
         Ok(())
