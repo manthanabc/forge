@@ -193,7 +193,7 @@ impl<A: Services, F: CommandInfra> API for ForgeAPI<A, F> {
 
     async fn set_active_profile(&self, profile_name: String) -> anyhow::Result<()> {
         let mut config = self.services.read_app_config().await.unwrap_or_default();
-        config.active_provider = Some(profile_name);
+        config.active_profile = Some(profile_name);
         // Update config file
         self.services.write_app_config(&config).await?;
 

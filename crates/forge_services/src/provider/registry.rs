@@ -47,19 +47,19 @@ impl<F: EnvironmentInfra> ForgeProviderRegistry<F> {
     fn get_provider(&self, forge_config: AppConfig) -> Option<Provider> {
         let providers = self.load_yaml().ok()?;
 
-        // First, try to find the explicitly active provider
-        let active_provider = forge_config.active_provider.and_then(|active_id| {
+        // First, try to find the explicitly active profile
+        let active_profile = forge_config.active_profile.and_then(|active_id| {
             providers
                 .iter()
                 .find(|p| p.name == active_id)
                 .and_then(|def| self.config_to_provider(def))
         });
 
-        if active_provider.is_some() {
-            return active_provider;
+        if active_profile.is_some() {
+            return active_profile;
         }
 
-        // If no active provider, try to find the first one that can be configured
+        // If no active profile, try to find the first one that can be configured
         // otherwise fallback to env provider
         providers
             .iter()
@@ -150,11 +150,11 @@ impl<F: EnvironmentInfra> ProviderRegistry for ForgeProviderRegistry<F> {
             Err(_) => return Ok(Vec::new()),
         };
 
-        let active_provider_id = config.active_provider.as_ref();
+        let active_profile_id = config.active_profile.as_ref();
         let mut profile_list = Vec::new();
 
         for def in profiles {
-            let is_active = active_provider_id == Some(&def.name);
+            let is_active = active_profile_id == Some(&def.name);
 
             profile_list.push(forge_app::Profile {
                 name: def.name.clone(),

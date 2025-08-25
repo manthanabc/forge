@@ -109,7 +109,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
 
         let cli_profiles: Vec<CliProfile> = providers.into_iter().map(CliProfile).collect();
 
-        // Find the currently active provider for cursor positioning
+        // Find the currently active profile for cursor positioning
         let starting_cursor = cli_profiles.iter().position(|p| p.0.is_active).unwrap_or(0);
 
         match ForgeSelect::select("Select a profile:", cli_profiles)
@@ -132,7 +132,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
         let profiles = self.api.list_profiles().await?;
         let selected_profile = profiles.iter().find(|p| p.name == provider_id);
 
-        // Set the active provider
+        // Set the active profile
         self.api.set_active_profile(provider_id.clone()).await?;
 
         // Refresh the provider state to reflect the change
