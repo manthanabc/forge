@@ -1,6 +1,8 @@
 use derive_more::From;
 use serde::{Deserialize, Serialize};
 
+use super::ProfileName;
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InitAuth {
@@ -9,12 +11,14 @@ pub struct InitAuth {
     pub token: String,
 }
 
+/// Local configuration that is managed by Forge. This should not contain any
+/// information that would require user intervention.
 #[derive(Default, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppConfig {
     pub key_info: Option<LoginInfo>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub active_provider: Option<String>,
+    pub profile: Option<ProfileName>,
 }
 
 #[derive(Clone, Serialize, Deserialize, From)]

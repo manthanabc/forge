@@ -2,14 +2,47 @@ use std::collections::HashMap;
 
 use derive_setters::Setters;
 use forge_domain::{Compact, MaxTokens, ModelId, Provider, Temperature, TopK, TopP, Update};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-#[derive(Debug, Clone, Setters)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct ProfileName(pub String);
+
+impl From<String> for ProfileName {
+    fn from(name: String) -> Self {
+        Self(name)
+    }
+}
+
+impl From<&str> for ProfileName {
+    fn from(name: &str) -> Self {
+        Self(name.to_string())
+    }
+}
+
+impl AsRef<str> for ProfileName {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for ProfileName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Setters)]
 #[setters(strip_option, into)]
 pub struct Profile {
-    pub name: String,
+    /// Unique name identifier for this profile
+    /// Used to distinguish between different profile configurations
+    pub name: ProfileName,
+
+    /// AI provider configuration to use for this profile
+    /// Determines which AI service (e.g., OpenAI, Anthropic, etc.) will be used
     pub provider: Provider,
-    pub is_active: bool,
 
     // Fields from Workflow (excluding agents)
     /// Path pattern for custom template files (supports glob patterns)
@@ -94,11 +127,10 @@ pub struct Profile {
 }
 
 impl Profile {
-    pub fn new(name: String) -> Self {
+    pub fn new(name: impl Into<ProfileName>) -> Self {
         Self {
-            name,
+            name: name.into(),
             provider: Provider::default(),
-            is_active: Default::default(),
             templates: Default::default(),
             variables: Default::default(),
             updates: Default::default(),
@@ -114,5 +146,127 @@ impl Profile {
             max_requests_per_turn: Default::default(),
             compact: Default::default(),
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Setters)]
+#[setters(strip_option, into)]
+pub struct ProfileConfig {
+    pub profiles: Vec<Profile>,
+    // FIXME: drop it; to be read/write in app_config
+    pub active_profile: ProfileName,
+}
+
+impl ProfileConfig {
+    pub fn new(active_profile: impl Into<ProfileName>) -> Self {
+        Self { profiles: vec![], active_profile: active_profile.into() }
+    }
+
+    pub fn get_active_profile(&self) -> Option<&Profile> {
+        self.profiles.iter().find(|p| p.name == self.active_profile)
+    }
+
+    pub fn get_profile(&self, name: &ProfileName) -> Option<&Profile> {
+        self.profiles.iter().find(|p| &p.name == name)
+    }
+
+    pub fn set_active_profile(&mut self, name: impl Into<ProfileName>) {
+        self.active_profile = name.into();
+    }
+
+    pub fn add_profile(&mut self, profile: Profile) {
+        // Remove any existing profile with the same name
+        self.profiles.retain(|p| p.name != profile.name);
+        self.profiles.push(profile);
+    }
+
+    pub fn remove_profile(&mut self, name: &ProfileName) {
+        self.profiles.retain(|p| &p.name != name);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pretty_assertions::assert_eq;
+
+    use super::*;
+
+    #[test]
+    fn test_provider_name_creation() {
+        let fixture_str = "test-profile";
+        let fixture_string = "test-profile".to_string();
+
+        let actual_from_str = ProfileName::from(fixture_str);
+        let actual_from_string = ProfileName::from(fixture_string);
+
+        let expected = ProfileName("test-profile".to_string());
+
+        assert_eq!(actual_from_str, expected);
+        assert_eq!(actual_from_string, expected);
+        assert_eq!(actual_from_str.as_ref(), "test-profile");
+    }
+
+    #[test]
+    fn test_profile_creation() {
+        let fixture_name = "test-profile";
+
+        let actual = Profile::new(fixture_name);
+        let expected_name = ProfileName::from(fixture_name);
+
+        assert_eq!(actual.name, expected_name);
+        assert_eq!(actual.provider, Provider::default());
+    }
+
+    #[test]
+    fn test_profile_config_creation() {
+        let fixture_active_name = "active-profile";
+
+        let actual = ProfileConfig::new(fixture_active_name);
+        let expected_active = ProfileName::from(fixture_active_name);
+
+        assert_eq!(actual.active_profile, expected_active);
+        assert_eq!(actual.profiles.len(), 0);
+    }
+
+    #[test]
+    fn test_profile_config_operations() {
+        let fixture_profile1 = Profile::new("profile1");
+        let fixture_profile2 = Profile::new("profile2");
+        let fixture_active_name = "profile1";
+
+        let mut actual = ProfileConfig::new(fixture_active_name);
+        actual.add_profile(fixture_profile1.clone());
+        actual.add_profile(fixture_profile2.clone());
+
+        assert_eq!(actual.profiles.len(), 2);
+        assert_eq!(actual.get_active_profile(), Some(&fixture_profile1));
+        assert_eq!(
+            actual.get_profile(&ProfileName::from("profile2")),
+            Some(&fixture_profile2)
+        );
+
+        actual.set_active_profile("profile2");
+        assert_eq!(actual.get_active_profile(), Some(&fixture_profile2));
+
+        actual.remove_profile(&ProfileName::from("profile1"));
+        assert_eq!(actual.profiles.len(), 1);
+        assert_eq!(actual.get_profile(&ProfileName::from("profile1")), None);
+    }
+
+    #[test]
+    fn test_profile_config_duplicate_names() {
+        let fixture_profile1 = Profile::new("same-name");
+        let fixture_profile2 = Profile::new("same-name").model("gpt-4");
+
+        let mut actual = ProfileConfig::new("same-name");
+        actual.add_profile(fixture_profile1.clone());
+        actual.add_profile(fixture_profile2.clone());
+
+        // Should only have one profile with the name, the most recent one added
+        assert_eq!(actual.profiles.len(), 1);
+        assert_eq!(
+            actual.get_profile(&ProfileName::from("same-name")),
+            Some(&fixture_profile2)
+        );
     }
 }

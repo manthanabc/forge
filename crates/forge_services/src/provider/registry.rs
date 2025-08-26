@@ -44,14 +44,14 @@ impl<F: EnvironmentInfra> ForgeProviderRegistry<F> {
         None
     }
 
-    fn get_provider(&self, forge_config: AppConfig) -> Option<Provider> {
+    fn get_provider(&self, config: AppConfig) -> Option<Provider> {
         let providers = self.load_yaml().ok()?;
 
         // First, try to find the explicitly active provider
-        let active_provider = forge_config.active_provider.and_then(|active_id| {
+        let active_provider = config.profile.and_then(|active_id| {
             providers
                 .iter()
-                .find(|p| p.name == active_id)
+                .find(|p| p.name == active_id.as_ref())
                 .and_then(|def| self.config_to_provider(def))
         });
 
@@ -167,23 +167,18 @@ impl<F: EnvironmentInfra> ProviderRegistry for ForgeProviderRegistry<F> {
         Ok(provider)
     }
 
-    async fn list_profiles(&self, config: AppConfig) -> anyhow::Result<Vec<Profile>> {
+    async fn list_profiles(&self, _config: AppConfig) -> anyhow::Result<Vec<Profile>> {
         let profiles = self.load_yaml()?;
 
-        let active_provider_id = config.active_provider.as_ref();
         let mut profile_list = Vec::new();
 
         for def in profiles {
-            let is_active = active_provider_id == Some(&def.name);
-
             let provider = self.config_to_provider(&def).unwrap_or_else(|| {
                 // Fallback provider if parsing fails
                 Provider::openai("dummy-key")
             });
 
-            let profile = Profile::new(def.name.clone())
-                .provider(provider)
-                .is_active(is_active);
+            let profile = Profile::new(def.name.clone()).provider(provider);
 
             let profile = if let Some(model_name) = &def.model {
                 profile.model(ModelId::new(model_name))
