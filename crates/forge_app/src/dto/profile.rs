@@ -149,29 +149,23 @@ impl Profile {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Setters)]
+#[derive(Debug, Clone, PartialEq, Default, Setters)]
 #[setters(strip_option, into)]
 pub struct ProfileConfig {
     pub profiles: Vec<Profile>,
-    // FIXME: drop it; to be read/write in app_config
-    pub active_profile: ProfileName,
 }
 
 impl ProfileConfig {
-    pub fn new(active_profile: impl Into<ProfileName>) -> Self {
-        Self { profiles: vec![], active_profile: active_profile.into() }
+    pub fn new() -> Self {
+        Self { profiles: vec![] }
     }
 
-    pub fn get_active_profile(&self) -> Option<&Profile> {
-        self.profiles.iter().find(|p| p.name == self.active_profile)
+    pub fn get_active_profile(&self, active_profile: &ProfileName) -> Option<&Profile> {
+        self.profiles.iter().find(|p| &p.name == active_profile)
     }
 
     pub fn get_profile(&self, name: &ProfileName) -> Option<&Profile> {
         self.profiles.iter().find(|p| &p.name == name)
-    }
-
-    pub fn set_active_profile(&mut self, name: impl Into<ProfileName>) {
-        self.active_profile = name.into();
     }
 
     pub fn add_profile(&mut self, profile: Profile) {
@@ -219,12 +213,8 @@ mod tests {
 
     #[test]
     fn test_profile_config_creation() {
-        let fixture_active_name = "active-profile";
+        let actual = ProfileConfig::new();
 
-        let actual = ProfileConfig::new(fixture_active_name);
-        let expected_active = ProfileName::from(fixture_active_name);
-
-        assert_eq!(actual.active_profile, expected_active);
         assert_eq!(actual.profiles.len(), 0);
     }
 
@@ -232,21 +222,28 @@ mod tests {
     fn test_profile_config_operations() {
         let fixture_profile1 = Profile::new("profile1");
         let fixture_profile2 = Profile::new("profile2");
-        let fixture_active_name = "profile1";
+        let fixture_active_name = ProfileName::from("profile1");
 
-        let mut actual = ProfileConfig::new(fixture_active_name);
+        let mut actual = ProfileConfig::new();
         actual.add_profile(fixture_profile1.clone());
         actual.add_profile(fixture_profile2.clone());
 
         assert_eq!(actual.profiles.len(), 2);
-        assert_eq!(actual.get_active_profile(), Some(&fixture_profile1));
+        assert_eq!(
+            actual.get_active_profile(&fixture_active_name),
+            Some(&fixture_profile1)
+        );
         assert_eq!(
             actual.get_profile(&ProfileName::from("profile2")),
             Some(&fixture_profile2)
         );
 
-        actual.set_active_profile("profile2");
-        assert_eq!(actual.get_active_profile(), Some(&fixture_profile2));
+        // Test that we can get a different active profile
+        let fixture_active_name2 = ProfileName::from("profile2");
+        assert_eq!(
+            actual.get_active_profile(&fixture_active_name2),
+            Some(&fixture_profile2)
+        );
 
         actual.remove_profile(&ProfileName::from("profile1"));
         assert_eq!(actual.profiles.len(), 1);
@@ -258,7 +255,7 @@ mod tests {
         let fixture_profile1 = Profile::new("same-name");
         let fixture_profile2 = Profile::new("same-name").model("gpt-4");
 
-        let mut actual = ProfileConfig::new("same-name");
+        let mut actual = ProfileConfig::new();
         actual.add_profile(fixture_profile1.clone());
         actual.add_profile(fixture_profile2.clone());
 
