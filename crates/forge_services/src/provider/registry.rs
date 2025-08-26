@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use forge_app::ProviderRegistry;
-use forge_app::domain::{Provider, ProviderUrl};
+use forge_app::domain::{ModelId, Provider, ProviderUrl};
 use forge_app::dto::{AppConfig, Profile};
 use serde::Deserialize;
 use tokio::sync::RwLock;
@@ -176,12 +176,22 @@ impl<F: EnvironmentInfra> ProviderRegistry for ForgeProviderRegistry<F> {
         for def in profiles {
             let is_active = active_provider_id == Some(&def.name);
 
-            profile_list.push(Profile {
-                name: def.name.clone(),
-                provider: def.provider.clone(),
-                is_active,
-                model_name: def.model.clone(),
+            let provider = self.config_to_provider(&def).unwrap_or_else(|| {
+                // Fallback provider if parsing fails
+                Provider::openai("dummy-key")
             });
+
+            let profile = Profile::new(def.name.clone())
+                .provider(provider)
+                .is_active(is_active);
+            
+            let profile = if let Some(model_name) = &def.model {
+                profile.model(ModelId::new(model_name))
+            } else {
+                profile
+            };
+            
+            profile_list.push(profile);
         }
 
         Ok(profile_list)

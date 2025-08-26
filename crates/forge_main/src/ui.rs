@@ -141,9 +141,8 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
 
         // Load the default model from the profile if specified
 
-        if let Some(model_name) = selected_profile.and_then(|p| p.model_name.as_ref()) {
-            self.update_model_state(ModelId::new(model_name.clone()))
-                .await?;
+        if let Some(model_name) = selected_profile.and_then(|p| p.model.as_ref()) {
+            self.update_model_state(model_name.clone()).await?;
         }
         self.writeln(format!("✓ Selected profile: {provider_id}"))?;
 
@@ -1017,8 +1016,8 @@ impl Display for CliProfile {
         let profile = &self.0;
         write!(f, "{}", profile.name)?;
 
-        if let Some(model_name) = &profile.model_name {
-            write!(f, " {}", model_name.dimmed())?;
+        if let Some(model_name) = &profile.model {
+            write!(f, " {}", model_name.as_str().dimmed())?;
         }
 
         Ok(())
