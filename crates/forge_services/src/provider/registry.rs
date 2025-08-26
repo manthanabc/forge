@@ -4,7 +4,7 @@ use std::sync::Arc;
 use anyhow::Context;
 use forge_app::domain::{Provider, ProviderUrl};
 use forge_app::dto::AppConfig;
-use forge_app::{Profile, ProviderRegistry};
+use forge_app::{dto::Profile, ProviderRegistry};
 use serde::Deserialize;
 use tokio::sync::RwLock;
 
@@ -176,7 +176,7 @@ impl<F: EnvironmentInfra> ProviderRegistry for ForgeProviderRegistry<F> {
         for def in profiles {
             let is_active = active_provider_id == Some(&def.name);
 
-            profile_list.push(forge_app::Profile {
+            profile_list.push(Profile {
                 name: def.name.clone(),
                 provider: def.provider.clone(),
                 is_active,

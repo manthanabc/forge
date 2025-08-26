@@ -5,7 +5,7 @@ use anyhow::{Context, Result};
 use forge_app::dto::{AppConfig, InitAuth};
 use forge_app::{
     AppConfigService, AuthService, ConversationService, EnvironmentService, FileDiscoveryService,
-    ForgeApp, McpConfigManager, Profile, ProviderRegistry, ProviderService, Services, User,
+    ForgeApp, McpConfigManager, dto::Profile, ProviderRegistry, ProviderService, Services, User,
     UserUsage, Walker, WorkflowService,
 };
 use forge_domain::*;

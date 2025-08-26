@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use forge_app::dto::{AppConfig, InitAuth};
-use forge_app::{Profile, User, UserUsage};
+use forge_app::{dto::Profile, User, UserUsage};
 use forge_stream::MpscStream;
 
 use crate::*;

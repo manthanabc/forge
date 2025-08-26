@@ -13,16 +13,8 @@ use reqwest_eventsource::EventSource;
 use url::Url;
 
 use crate::Walker;
-use crate::dto::{AppConfig, InitAuth, LoginInfo};
+use crate::dto::{AppConfig, InitAuth, LoginInfo, Profile};
 use crate::user::{User, UserUsage};
-
-#[derive(Debug, Clone)]
-pub struct Profile {
-    pub name: String,
-    pub provider: String,
-    pub is_active: bool,
-    pub model_name: Option<String>,
-}
 
 #[derive(Debug)]
 pub struct ShellOutput {
