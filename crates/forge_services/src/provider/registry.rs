@@ -184,13 +184,13 @@ impl<F: EnvironmentInfra> ProviderRegistry for ForgeProviderRegistry<F> {
             let profile = Profile::new(def.name.clone())
                 .provider(provider)
                 .is_active(is_active);
-            
+
             let profile = if let Some(model_name) = &def.model {
                 profile.model(ModelId::new(model_name))
             } else {
                 profile
             };
-            
+
             profile_list.push(profile);
         }
 

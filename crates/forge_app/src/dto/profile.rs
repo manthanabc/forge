@@ -92,3 +92,27 @@ pub struct Profile {
     /// If not specified, each agent's individual setting will be used
     pub compact: Option<Compact>,
 }
+
+impl Profile {
+    pub fn new(name: String) -> Self {
+        Self {
+            name,
+            provider: Provider::default(),
+            is_active: Default::default(),
+            templates: Default::default(),
+            variables: Default::default(),
+            updates: Default::default(),
+            model: Default::default(),
+            max_walker_depth: Default::default(),
+            custom_rules: Default::default(),
+            temperature: Default::default(),
+            top_p: Default::default(),
+            top_k: Default::default(),
+            max_tokens: Default::default(),
+            tool_supported: Default::default(),
+            max_tool_failure_per_turn: Default::default(),
+            max_requests_per_turn: Default::default(),
+            compact: Default::default(),
+        }
+    }
+}
