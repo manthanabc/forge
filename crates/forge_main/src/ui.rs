@@ -110,8 +110,11 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
         let cli_profiles: Vec<CliProfile> = providers.into_iter().map(CliProfile).collect();
 
         // Get the current active profile to determine cursor position
-        let config = self.api.app_config().await?;
-        let active_profile_name = config.profile.as_ref().map(|p| p.as_ref()).unwrap_or("");
+        let config = self.api.app_config().await.ok();
+        let active_profile_name = config.and_then(|config| config.profile)
+            .map(|p| p.0)
+            .unwrap_or("".to_string());
+
         let starting_cursor = cli_profiles
             .iter()
             .position(|p| p.0.name.as_ref() == active_profile_name)
