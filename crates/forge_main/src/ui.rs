@@ -111,7 +111,8 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
 
         // Get the current active profile to determine cursor position
         let config = self.api.app_config().await.ok();
-        let active_profile_name = config.and_then(|config| config.profile)
+        let active_profile_name = config
+            .and_then(|config| config.profile)
             .map(|p| p.0)
             .unwrap_or("".to_string());
 
