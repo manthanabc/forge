@@ -1,5 +1,5 @@
-use std::fs;
 use std::sync::Arc;
+use std::{fs, io};
 
 use anyhow::Context;
 use forge_app::ProviderRegistry;
@@ -115,43 +115,38 @@ impl<F: EnvironmentInfra> ForgeProviderRegistry<F> {
 
     fn load_yaml(&self) -> anyhow::Result<Vec<ProfileConfig>> {
         let profile_path = self.infra.get_environment().base_path.join("profiles.yaml");
+        const DEFAULT_CONFIG: &str = include_str!("../../../../profiles.default.yaml");
 
-        if !profile_path.exists() {
-            const DEFAULT_CONFIG: &str = include_str!("../../../../profiles.default.yaml");
-            println!(
-                "Configuration file not found. Created a default at: {}",
-                profile_path.display()
-            );
+        let create_and_load_default = || {
             fs::write(&profile_path, DEFAULT_CONFIG).with_context(|| {
                 format!(
                     "Failed to write default config to {}",
                     profile_path.display()
                 )
             })?;
-        }
 
-        let content = std::fs::read_to_string(&profile_path)?;
-        let profiles: Vec<ProfileConfig> = match serde_yml::from_str(&content) {
-            Ok(profiles) => profiles,
-            Err(_) => {
-                // If parsing fails, it might be an incompatible format. Replace with default.
-                const DEFAULT_CONFIG: &str = include_str!("../../../../profiles.default.yaml");
-                println!(
-                    "Incompatible profiles.yaml format detected. Recreating with default configuration at: {}",
-                    profile_path.display()
-                );
-                fs::write(&profile_path, DEFAULT_CONFIG).with_context(|| {
-                    format!(
-                        "Failed to write default config to {}",
-                        profile_path.display()
-                    )
-                })?;
-
-                // Parse the newly written default content
-                serde_yml::from_str(DEFAULT_CONFIG)?
-            }
+            serde_yml::from_str(DEFAULT_CONFIG).map_err(Into::into)
         };
-        Ok(profiles)
+
+        match fs::read_to_string(&profile_path) {
+            Ok(content) => {
+                if content.trim().is_empty() {
+                    create_and_load_default()
+                } else {
+                    // If parsing fails, error out.
+                    serde_yml::from_str(&content).with_context(|| {
+                        format!("Invalid file format in {}.", profile_path.display())
+                    })
+                }
+            }
+            Err(err) if err.kind() == io::ErrorKind::NotFound => {
+                // Create default
+                create_and_load_default()
+            }
+            Err(err) => {
+                Err(err).with_context(|| format!("Failed to read {}", profile_path.display()))
+            }
+        }
     }
 }
 
