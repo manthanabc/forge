@@ -162,7 +162,7 @@ impl<F: EnvironmentInfra> ProviderRegistry for ForgeProviderRegistry<F> {
         Ok(provider)
     }
 
-    async fn list_profiles(&self, _config: AppConfig) -> anyhow::Result<Vec<Profile>> {
+    async fn list_profiles(&self) -> anyhow::Result<Vec<Profile>> {
         let profiles = self.load_yaml()?;
 
         let mut profile_list = Vec::new();

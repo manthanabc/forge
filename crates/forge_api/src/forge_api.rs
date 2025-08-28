@@ -187,8 +187,7 @@ impl<A: Services, F: CommandInfra> API for ForgeAPI<A, F> {
         Ok(None)
     }
     async fn list_profiles(&self) -> anyhow::Result<Vec<Profile>> {
-        let config = self.services.read_app_config().await.unwrap_or_default();
-        self.services.list_profiles(config).await
+        self.services.list_profiles().await
     }
 
     async fn set_active_profile(&self, profile_name: String) -> anyhow::Result<()> {
