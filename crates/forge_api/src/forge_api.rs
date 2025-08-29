@@ -12,6 +12,7 @@ use forge_domain::*;
 use forge_infra::ForgeInfra;
 use forge_services::{CommandInfra, ForgeServices};
 use forge_stream::MpscStream;
+use tracing::warn;
 
 use crate::API;
 
@@ -191,7 +192,13 @@ impl<A: Services, F: CommandInfra> API for ForgeAPI<A, F> {
     }
 
     async fn set_active_profile(&self, profile_name: String) -> anyhow::Result<()> {
-        let mut config = self.services.read_app_config().await.unwrap_or_default();
+        let mut config = match self.services.read_app_config().await {
+            Ok(config) => config,
+            Err(_) => {
+                warn!("Failed to read app config, using default");
+                AppConfig::default()
+            }
+        };
         config.profile = Some(profile_name.into());
         // Update config file
         self.services.write_app_config(&config).await?;
