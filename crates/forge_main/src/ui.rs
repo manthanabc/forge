@@ -97,9 +97,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
         Ok(())
     }
 
-    async fn select_profile(&mut self) -> Result<Option<String>> {
-        let providers = self.api.list_profiles().await?;
-
+    async fn select_profile(&mut self, providers: Vec<Profile>) -> Result<Option<String>> {
         if providers.is_empty() {
             self.writeln(
                 "No profiles configured. Create a profiles.yaml file to configure profiles.",
@@ -131,14 +129,14 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
     }
 
     async fn on_profile_selection(&mut self) -> Result<()> {
-        let provider_option = self.select_profile().await?;
+        let profiles = self.api.list_profiles().await?;
+        let provider_option = self.select_profile(profiles.clone()).await?;
 
         let provider_id = match provider_option {
             Some(id) => id,
             None => return Ok(()),
         };
 
-        let profiles = self.api.list_profiles().await?;
         let selected_profile = profiles.iter().find(|p| p.name.as_ref() == provider_id);
 
         // Set the active provider
