@@ -188,17 +188,14 @@ pub trait WorkflowService {
     async fn read_merged(
         &self,
         path: Option<&Path>,
-        profile_name: Option<&ProfileName>,
+        profile: Option<&Profile>,
     ) -> anyhow::Result<Workflow> {
         let workflow = self.read_workflow(path).await?;
         let mut base_workflow = Workflow::default();
 
-        if let Some(name) = profile_name {
-            let profiles = self.provider_registry().list_profiles().await?;
-            if let Some(profile) = profiles.iter().find(|p| &p.name == name) {
-                let profile_workflow = profile.to_workflow()?;
-                base_workflow.merge(profile_workflow);
-            }
+        if let Some(profil) = profile {
+            let profile_workflow = profil.to_workflow()?;
+            base_workflow.merge(profile_workflow);
         }
 
         base_workflow.merge(workflow);
@@ -524,17 +521,14 @@ impl<I: Services> WorkflowService for I {
     async fn read_merged(
         &self,
         path: Option<&Path>,
-        profile_name: Option<&ProfileName>,
+        profile: Option<&Profile>,
     ) -> anyhow::Result<Workflow> {
         let workflow = self.read_workflow(path).await?;
         let mut base_workflow = Workflow::default();
 
-        if let Some(name) = profile_name {
-            let profiles = self.provider_registry().list_profiles().await?;
-            if let Some(profile) = profiles.iter().find(|p| &p.name == name) {
-                let profile_workflow = profile.to_workflow()?;
-                base_workflow.merge(profile_workflow);
-            }
+        if let Some(profil) = profile {
+            let profile_workflow = profil.to_workflow()?;
+            base_workflow.merge(profile_workflow);
         }
 
         base_workflow.merge(workflow);
