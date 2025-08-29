@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use derive_setters::Setters;
-use forge_domain::{Compact, MaxTokens, ModelId, Provider, Temperature, TopK, TopP, Update};
+use forge_domain::{Compact, MaxTokens, ModelId, Provider, Temperature, TopK, TopP, Update, Workflow};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -146,6 +146,28 @@ impl Profile {
             max_requests_per_turn: Default::default(),
             compact: Default::default(),
         }
+    }
+
+    pub fn to_workflow(&self) -> anyhow::Result<Workflow> {
+        Ok(Workflow {
+            templates: self.templates.clone(),
+            variables: self.variables.clone(),
+            updates: self.updates.clone(),
+            model: self.model.clone(),
+            max_walker_depth: self.max_walker_depth,
+            custom_rules: self.custom_rules.clone(),
+            temperature: self.temperature,
+            top_p: self.top_p,
+            top_k: self.top_k,
+            max_tokens: self.max_tokens,
+            tool_supported: self.tool_supported,
+            max_tool_failure_per_turn: self.max_tool_failure_per_turn,
+            max_requests_per_turn: self.max_requests_per_turn,
+            compact: self.compact.clone(),
+            // Agents and commands are not part of a profile, so they are empty
+            agents: Vec::new(),
+            commands: Vec::new(),
+        })
     }
 }
 

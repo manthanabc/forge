@@ -13,7 +13,7 @@ use reqwest_eventsource::EventSource;
 use url::Url;
 
 use crate::Walker;
-use crate::dto::{AppConfig, InitAuth, LoginInfo, Profile};
+use crate::dto::{AppConfig, InitAuth, LoginInfo, Profile, ProfileName};
 use crate::user::{User, UserUsage};
 
 #[derive(Debug)]
@@ -185,9 +185,22 @@ pub trait WorkflowService {
 
     /// Reads the workflow from the given path and merges it with an default
     /// workflow.
-    async fn read_merged(&self, path: Option<&Path>) -> anyhow::Result<Workflow> {
+    async fn read_merged(
+        &self,
+        path: Option<&Path>,
+        profile_name: Option<&ProfileName>,
+    ) -> anyhow::Result<Workflow> {
         let workflow = self.read_workflow(path).await?;
         let mut base_workflow = Workflow::default();
+
+        if let Some(name) = profile_name {
+            let profiles = self.provider_registry().list_profiles().await?;
+            if let Some(profile) = profiles.iter().find(|p| &p.name == name) {
+                let profile_workflow = profile.to_workflow()?;
+                base_workflow.merge(profile_workflow);
+            }
+        }
+
         base_workflow.merge(workflow);
         Ok(base_workflow)
     }
@@ -506,6 +519,26 @@ impl<I: Services> WorkflowService for I {
 
     async fn read_workflow(&self, path: Option<&Path>) -> anyhow::Result<Workflow> {
         self.workflow_service().read_workflow(path).await
+    }
+
+    async fn read_merged(
+        &self,
+        path: Option<&Path>,
+        profile_name: Option<&ProfileName>,
+    ) -> anyhow::Result<Workflow> {
+        let workflow = self.read_workflow(path).await?;
+        let mut base_workflow = Workflow::default();
+
+        if let Some(name) = profile_name {
+            let profiles = self.provider_registry().list_profiles().await?;
+            if let Some(profile) = profiles.iter().find(|p| &p.name == name) {
+                let profile_workflow = profile.to_workflow()?;
+                base_workflow.merge(profile_workflow);
+            }
+        }
+
+        base_workflow.merge(workflow);
+        Ok(base_workflow)
     }
 
     async fn write_workflow(&self, path: Option<&Path>, workflow: &Workflow) -> anyhow::Result<()> {
