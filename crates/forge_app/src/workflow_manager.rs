@@ -34,8 +34,8 @@ impl<S: WorkflowService + AgentLoaderService + Sized> WorkflowManager<S> {
         workflow = self.extend_agents(workflow).await?;
         Ok(workflow)
     }
-    pub async fn read_merged(&self, path: Option<&Path>, profile: Option<Profile>) -> anyhow::Result<Workflow> {
-        let mut workflow = self.service.read_merged(path, profile).await?;
+    pub async fn read_merged(&self, path: Option<&Path>) -> anyhow::Result<Workflow> {
+        let mut workflow = self.service.read_merged(path, None).await?;
         workflow = self.extend_agents(workflow).await?;
         Ok(workflow)
     }

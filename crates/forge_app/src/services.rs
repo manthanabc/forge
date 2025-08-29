@@ -188,19 +188,8 @@ pub trait WorkflowService {
     async fn read_merged(
         &self,
         path: Option<&Path>,
-        profile: Option<&Profile>,
-    ) -> anyhow::Result<Workflow> {
-        let workflow = self.read_workflow(path).await?;
-        let mut base_workflow = Workflow::default();
-
-        if let Some(profil) = profile {
-            let profile_workflow = profil.to_workflow()?;
-            base_workflow.merge(profile_workflow);
-        }
-
-        base_workflow.merge(workflow);
-        Ok(base_workflow)
-    }
+        profile_name: Option<&ProfileName>,
+    ) -> anyhow::Result<Workflow>;
 
     /// Writes the given workflow to the specified path.
     /// If no path is provided, it will try to find forge.yaml in the current
@@ -521,14 +510,17 @@ impl<I: Services> WorkflowService for I {
     async fn read_merged(
         &self,
         path: Option<&Path>,
-        profile: Option<&Profile>,
+        profile_name: Option<&ProfileName>,
     ) -> anyhow::Result<Workflow> {
         let workflow = self.read_workflow(path).await?;
         let mut base_workflow = Workflow::default();
 
-        if let Some(profil) = profile {
-            let profile_workflow = profil.to_workflow()?;
-            base_workflow.merge(profile_workflow);
+        if let Some(name) = profile_name {
+            let profiles = self.provider_registry().list_profiles().await?;
+            if let Some(profile) = profiles.iter().find(|p| &p.name == name) {
+                let profile_workflow = profile.to_workflow()?;
+                base_workflow.merge(profile_workflow);
+            }
         }
 
         base_workflow.merge(workflow);

@@ -5,6 +5,9 @@ use anyhow::Context;
 use forge_app::WorkflowService;
 use forge_app::domain::Workflow;
 
+use forge_app::dto::ProfileName;
+use merge::Merge;
+
 use crate::{FileReaderInfra, FileWriterInfra};
 
 /// A workflow loader to load the workflow from the given path.
@@ -96,6 +99,17 @@ impl<F: FileWriterInfra + FileReaderInfra> WorkflowService for ForgeWorkflowServ
     async fn read_workflow(&self, path: Option<&Path>) -> anyhow::Result<Workflow> {
         let path_to_use = path.unwrap_or_else(|| Path::new("forge.yaml"));
         self.read(path_to_use).await
+    }
+
+    async fn read_merged(
+        &self,
+        path: Option<&Path>,
+        _profile_name: Option<&ProfileName>,
+    ) -> anyhow::Result<Workflow> {
+        let workflow = self.read_workflow(path).await?;
+        let mut base_workflow = Workflow::default();
+        base_workflow.merge(workflow);
+        Ok(base_workflow)
     }
 
     async fn write_workflow(&self, path: Option<&Path>, workflow: &Workflow) -> anyhow::Result<()> {
