@@ -4,6 +4,7 @@ pub mod anthropic;
 mod app_config;
 pub mod openai;
 mod profile;
+pub mod profile_def;
 
 pub use app_config::*;
 pub use profile::*;
