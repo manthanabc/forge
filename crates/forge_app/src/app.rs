@@ -7,7 +7,7 @@ use forge_domain::*;
 use forge_stream::MpscStream;
 
 use crate::authenticator::Authenticator;
-use crate::dto::InitAuth;
+use crate::dto::{InitAuth, ProfileName};
 use crate::orch::Orchestrator;
 use crate::services::{CustomInstructionsService, TemplateService};
 use crate::tool_registry::ToolRegistry;
@@ -65,7 +65,7 @@ impl<S: Services> ForgeApp<S> {
         // Discover files using the discovery service
         let workflow = self
             .workflow_manager
-            .read_merged(None)
+            .read_merged(None, None)
             .await
             .unwrap_or_default();
         let max_depth = workflow.max_walker_depth;
@@ -218,8 +218,15 @@ impl<S: Services> ForgeApp<S> {
         self.workflow_manager.read_workflow(path).await
     }
 
-    pub async fn read_workflow_merged(&self, path: Option<&Path>) -> Result<Workflow> {
-        self.workflow_manager.read_merged(path).await
+    pub async fn read_workflow_merged(&self, path: Option<&Path>, profile_name: Option<&ProfileName>) -> Result<Workflow> {
+        let profile_name = match profile_name {
+            Some(name) => Some(name.clone()),
+            None => {
+                let config = self.services.read_app_config().await.unwrap_or_default();
+                config.profile
+            }
+        };
+        self.workflow_manager.read_merged(path, profile_name.as_ref()).await
     }
     pub async fn write_workflow(&self, path: Option<&Path>, workflow: &Workflow) -> Result<()> {
         self.workflow_manager.write_workflow(path, workflow).await

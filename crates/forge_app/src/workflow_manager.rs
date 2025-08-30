@@ -4,13 +4,15 @@ use std::sync::Arc;
 use forge_domain::Workflow;
 use merge::Merge;
 
-use crate::{AgentLoaderService, WorkflowService};
+use crate::{AgentLoaderService, ProviderRegistry, WorkflowService};
+use crate::dto::ProfileName;
 
+#[derive(Clone)]
 pub struct WorkflowManager<S> {
     service: Arc<S>,
 }
 
-impl<S: WorkflowService + AgentLoaderService + Sized> WorkflowManager<S> {
+impl<S: WorkflowService + AgentLoaderService + ProviderRegistry + Sized> WorkflowManager<S> {
     pub fn new(service: Arc<S>) -> WorkflowManager<S> {
         Self { service }
     }
@@ -34,8 +36,20 @@ impl<S: WorkflowService + AgentLoaderService + Sized> WorkflowManager<S> {
         workflow = self.extend_agents(workflow).await?;
         Ok(workflow)
     }
-    pub async fn read_merged(&self, path: Option<&Path>) -> anyhow::Result<Workflow> {
-        let mut workflow = self.service.read_merged(path, None).await?;
+    pub async fn read_merged(&self, path: Option<&Path>, profile_name: Option<&ProfileName>) -> anyhow::Result<Workflow> {
+        let workflow = self.service.read_workflow(path).await?;
+        let mut base_workflow = Workflow::default();
+
+        if let Some(name) = profile_name {
+            let profiles = self.service.list_profiles().await?;
+            if let Some(profile) = profiles.iter().find(|p| &p.name == name) {
+                let profile_workflow = profile.to_workflow()?;
+                base_workflow.merge(profile_workflow);
+            }
+        }
+
+        base_workflow.merge(workflow);
+        let mut workflow = base_workflow;
         workflow = self.extend_agents(workflow).await?;
         Ok(workflow)
     }

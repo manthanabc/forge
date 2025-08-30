@@ -10,17 +10,23 @@ use futures::StreamExt;
 use tokio::sync::RwLock;
 
 use crate::error::Error;
-use crate::{ConversationService, Services, WorkflowService};
+use crate::workflow_manager::WorkflowManager;
+use crate::{AppConfigService, ConversationService, Services};
 
 #[derive(Clone)]
 pub struct AgentExecutor<S> {
     services: Arc<S>,
+    workflow_manager: WorkflowManager<S>,
     pub tool_agents: Arc<RwLock<Option<Vec<ToolDefinition>>>>,
 }
 
 impl<S: Services> AgentExecutor<S> {
     pub fn new(services: Arc<S>) -> Self {
-        Self { services, tool_agents: Arc::new(RwLock::new(None)) }
+        Self {
+            workflow_manager: WorkflowManager::new(services.clone()),
+            services,
+            tool_agents: Arc::new(RwLock::new(None)),
+        }
     }
 
     /// Returns a list of tool definitions for all available agents.
@@ -28,7 +34,11 @@ impl<S: Services> AgentExecutor<S> {
         if let Some(tool_agents) = self.tool_agents.read().await.clone() {
             return Ok(tool_agents);
         }
-        let workflow = self.services.read_merged(None, None).await?;
+        let config = self.services.read_app_config().await.unwrap_or_default();
+        let workflow = self
+            .workflow_manager
+            .read_merged(None, config.profile.as_ref())
+            .await?;
 
         let agents: Vec<ToolDefinition> = workflow.agents.into_iter().map(Into::into).collect();
         *self.tool_agents.write().await = Some(agents.clone());
@@ -53,7 +63,11 @@ impl<S: Services> AgentExecutor<S> {
         .await?;
 
         // Create a new conversation for agent execution
-        let workflow = self.services.read_merged(None, None).await?;
+        let config = self.services.read_app_config().await.unwrap_or_default();
+        let workflow = self
+            .workflow_manager
+            .read_merged(None, config.profile.as_ref())
+            .await?;
         let conversation =
             ConversationService::create_conversation(self.services.as_ref(), workflow).await?;
 
