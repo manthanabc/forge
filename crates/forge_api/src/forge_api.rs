@@ -197,21 +197,14 @@ impl<A: Services, F: CommandInfra> API for ForgeAPI<A, F> {
         self.services.profile_service().get_active_profile().await
     }
 
-    async fn set_active_profile(&self, _profile_name: String) -> anyhow::Result<()> {
-        // let mut config = match self.services.read_app_config().await {
-        //     Ok(config) => config,
-        //     Err(_) => {
-        //         warn!("Failed to read app config, using default");
-        //         AppConfig::default()
-        //     }
-        // };
-        // config.profile = Some(profile_name.into());
-        // // Update config file
-        // self.services.write_app_config(&config).await?;
-
-        // // Clear model and provider cache
-        // self.services.clear_provider_cache().await;
-        // self.services.clear_model_cache().await;
+    async fn set_active_profile(&self, profile_name: String) -> anyhow::Result<()> {
+        self.services
+            .profile_service()
+            .set_active_profile(profile_name.into())
+            .await?;
+        // Clear model and provider cache
+        self.services.clear_provider_cache().await;
+        self.services.clear_model_cache().await;
         Ok(())
     }
 }

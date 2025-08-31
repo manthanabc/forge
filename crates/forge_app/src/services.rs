@@ -13,7 +13,7 @@ use reqwest_eventsource::EventSource;
 use url::Url;
 
 use crate::Walker;
-use crate::dto::{AppConfig, InitAuth, LoginInfo, Profile};
+use crate::dto::{AppConfig, InitAuth, LoginInfo, Profile, ProfileName};
 use crate::user::{User, UserUsage};
 
 #[derive(Debug)]
@@ -332,6 +332,7 @@ pub trait AuthService: Send + Sync {
 pub trait ProfileService: Send + Sync {
     async fn get_active_profile(&self) -> anyhow::Result<Option<Profile>>;
     async fn list_profiles(&self) -> anyhow::Result<Vec<Profile>>;
+    async fn set_active_profile(&self, profile_name: ProfileName) -> anyhow::Result<()>;
 }
 
 #[async_trait::async_trait]
@@ -752,5 +753,11 @@ impl<I: Services> ProfileService for I {
 
     async fn list_profiles(&self) -> anyhow::Result<Vec<Profile>> {
         self.profile_service().list_profiles().await
+    }
+
+    async fn set_active_profile(&self, profile_name: ProfileName) -> anyhow::Result<()> {
+        self.profile_service()
+            .set_active_profile(profile_name)
+            .await
     }
 }

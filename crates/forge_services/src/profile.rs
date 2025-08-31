@@ -5,11 +5,11 @@ use anyhow::Context;
 use forge_app::ProfileService;
 use forge_app::domain::{ModelId, Provider, ProviderUrl};
 use forge_app::dto::{Profile, ProfileName};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::EnvironmentInfra;
 
-#[derive(Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 struct ProfileConfig {
     name: String,
     provider: String,
@@ -18,7 +18,7 @@ struct ProfileConfig {
     base_url: Option<String>,
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 struct ProfilesFile {
     active_profile: Option<ProfileName>,
     profiles: Vec<ProfileConfig>,
@@ -146,5 +146,14 @@ impl<F: EnvironmentInfra> ProfileService for ForgeProfileService<F> {
             .map(|def| self.config_to_profile(def))
             .collect();
         Ok(profile_list)
+    }
+
+    async fn set_active_profile(&self, profile_name: ProfileName) -> anyhow::Result<()> {
+        let profile_path = self.infra.get_environment().base_path.join("profiles.yaml");
+        let mut profiles_file = self.load_yaml()?;
+        profiles_file.active_profile = Some(profile_name);
+        let content = serde_yml::to_string(&profiles_file)?;
+        fs::write(profile_path, content)?;
+        Ok(())
     }
 }
