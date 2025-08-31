@@ -327,10 +327,16 @@ pub trait AuthService: Send + Sync {
     async fn user_info(&self, api_key: &str) -> anyhow::Result<User>;
     async fn user_usage(&self, api_key: &str) -> anyhow::Result<UserUsage>;
 }
+
+#[async_trait::async_trait]
+pub trait ProfileService: Send + Sync {
+    async fn get_active_profile(&self) -> anyhow::Result<Option<Profile>>;
+    async fn list_profiles(&self) -> anyhow::Result<Vec<Profile>>;
+}
+
 #[async_trait::async_trait]
 pub trait ProviderRegistry: Send + Sync {
-    async fn get_provider(&self, config: AppConfig) -> anyhow::Result<Provider>;
-    async fn list_profiles(&self) -> anyhow::Result<Vec<Profile>>;
+    async fn get_provider(&self) -> anyhow::Result<Provider>;
     async fn clear_provider_cache(&self);
 }
 
@@ -380,6 +386,7 @@ pub trait Services: Send + Sync + 'static + Clone {
     type ProviderRegistry: ProviderRegistry;
     type AgentLoaderService: AgentLoaderService;
     type PolicyService: PolicyService;
+    type ProfileService: ProfileService;
 
     fn provider_service(&self) -> &Self::ProviderService;
     fn conversation_service(&self) -> &Self::ConversationService;
@@ -406,6 +413,7 @@ pub trait Services: Send + Sync + 'static + Clone {
     fn provider_registry(&self) -> &Self::ProviderRegistry;
     fn agent_loader_service(&self) -> &Self::AgentLoaderService;
     fn policy_service(&self) -> &Self::PolicyService;
+    fn profile_service(&self) -> &Self::ProfileService;
 }
 
 #[async_trait::async_trait]
@@ -663,11 +671,8 @@ impl<I: Services> CustomInstructionsService for I {
 
 #[async_trait::async_trait]
 impl<I: Services> ProviderRegistry for I {
-    async fn get_provider(&self, config: AppConfig) -> anyhow::Result<Provider> {
-        self.provider_registry().get_provider(config).await
-    }
-    async fn list_profiles(&self) -> anyhow::Result<Vec<Profile>> {
-        self.provider_registry().list_profiles().await
+    async fn get_provider(&self) -> anyhow::Result<Provider> {
+        self.provider_registry().get_provider().await
     }
     async fn clear_provider_cache(&self) {
         self.provider_registry().clear_provider_cache().await
@@ -736,5 +741,16 @@ impl<I: Services> PolicyService for I {
         self.policy_service()
             .check_operation_permission(operation)
             .await
+    }
+}
+
+#[async_trait::async_trait]
+impl<I: Services> ProfileService for I {
+    async fn get_active_profile(&self) -> anyhow::Result<Option<Profile>> {
+        self.profile_service().get_active_profile().await
+    }
+
+    async fn list_profiles(&self) -> anyhow::Result<Vec<Profile>> {
+        self.profile_service().list_profiles().await
     }
 }

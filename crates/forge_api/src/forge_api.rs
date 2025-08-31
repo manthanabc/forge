@@ -5,14 +5,14 @@ use anyhow::{Context, Result};
 use forge_app::dto::{AppConfig, InitAuth, Profile};
 use forge_app::{
     AppConfigService, AuthService, ConversationService, EnvironmentService, FileDiscoveryService,
-    ForgeApp, McpConfigManager, ProviderRegistry, ProviderService, Services, User, UserUsage,
-    Walker, WorkflowService,
+    ForgeApp, McpConfigManager, ProfileService, ProviderRegistry, ProviderService, Services, User,
+    UserUsage, Walker, WorkflowService,
 };
 use forge_domain::*;
 use forge_infra::ForgeInfra;
 use forge_services::{CommandInfra, ForgeServices};
 use forge_stream::MpscStream;
-use tracing::warn;
+use merge::Merge;
 
 use crate::API;
 
@@ -94,7 +94,11 @@ impl<A: Services, F: CommandInfra> API for ForgeAPI<A, F> {
 
     async fn read_merged(&self, path: Option<&Path>) -> anyhow::Result<Workflow> {
         let app = ForgeApp::new(self.services.clone());
-        app.read_workflow_merged(path).await
+        let mut workflow = app.read_workflow_merged(path).await?;
+        if let Some(profile) = self.services.profile_service().get_active_profile().await? {
+            workflow.merge(profile.to_workflow()?);
+        }
+        Ok(workflow)
     }
 
     async fn write_workflow(&self, path: Option<&Path>, workflow: &Workflow) -> anyhow::Result<()> {
@@ -162,9 +166,7 @@ impl<A: Services, F: CommandInfra> API for ForgeAPI<A, F> {
         forge_app.logout().await
     }
     async fn provider(&self) -> anyhow::Result<Provider> {
-        self.services
-            .get_provider(self.services.read_app_config().await.unwrap_or_default())
-            .await
+        self.services.get_provider().await
     }
     async fn app_config(&self) -> anyhow::Result<AppConfig> {
         self.services.read_app_config().await
@@ -188,24 +190,28 @@ impl<A: Services, F: CommandInfra> API for ForgeAPI<A, F> {
         Ok(None)
     }
     async fn list_profiles(&self) -> anyhow::Result<Vec<Profile>> {
-        self.services.list_profiles().await
+        self.services.profile_service().list_profiles().await
     }
 
-    async fn set_active_profile(&self, profile_name: String) -> anyhow::Result<()> {
-        let mut config = match self.services.read_app_config().await {
-            Ok(config) => config,
-            Err(_) => {
-                warn!("Failed to read app config, using default");
-                AppConfig::default()
-            }
-        };
-        config.profile = Some(profile_name.into());
-        // Update config file
-        self.services.write_app_config(&config).await?;
+    async fn get_active_profile(&self) -> anyhow::Result<Option<Profile>> {
+        self.services.profile_service().get_active_profile().await
+    }
 
-        // Clear model and provider cache
-        self.services.clear_provider_cache().await;
-        self.services.clear_model_cache().await;
+    async fn set_active_profile(&self, _profile_name: String) -> anyhow::Result<()> {
+        // let mut config = match self.services.read_app_config().await {
+        //     Ok(config) => config,
+        //     Err(_) => {
+        //         warn!("Failed to read app config, using default");
+        //         AppConfig::default()
+        //     }
+        // };
+        // config.profile = Some(profile_name.into());
+        // // Update config file
+        // self.services.write_app_config(&config).await?;
+
+        // // Clear model and provider cache
+        // self.services.clear_provider_cache().await;
+        // self.services.clear_model_cache().await;
         Ok(())
     }
 }

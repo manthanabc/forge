@@ -101,5 +101,6 @@ pub trait API: Sync + Send {
     async fn user_info(&self) -> anyhow::Result<Option<User>>;
     async fn user_usage(&self) -> anyhow::Result<Option<UserUsage>>;
     async fn list_profiles(&self) -> anyhow::Result<Vec<Profile>>;
+    async fn get_active_profile(&self) -> anyhow::Result<Option<Profile>>;
     async fn set_active_profile(&self, profile_name: String) -> anyhow::Result<()>;
 }
