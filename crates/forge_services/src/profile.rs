@@ -1,27 +1,31 @@
-use std::sync::Arc;
-use std::{fs, io};
+use std::{fs, io, sync::Arc};
 
 use anyhow::Context;
-use forge_app::ProfileService;
-use forge_app::domain::{ModelId, Provider, ProviderUrl};
+use forge_app::domain::{Provider, ProviderUrl};
 use forge_app::dto::{Profile, ProfileName};
+use forge_app::ProfileService;
 use serde::{Deserialize, Serialize};
 
 use crate::EnvironmentInfra;
 
 #[derive(Serialize, Deserialize, Clone)]
-struct ProfileConfig {
-    name: String,
+pub struct ProviderConfig {
     provider: String,
     api_key: Option<String>,
-    model: Option<String>,
     base_url: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ProfileYaml {
+    pub config: ProviderConfig,
+    #[serde(flatten)]
+    pub profile: Profile,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
 struct ProfilesFile {
     active_profile: Option<ProfileName>,
-    profiles: Vec<ProfileConfig>,
+    profiles: Vec<ProfileYaml>,
 }
 
 pub struct ForgeProfileService<F: EnvironmentInfra> {
@@ -65,21 +69,15 @@ impl<F: EnvironmentInfra> ForgeProfileService<F> {
         }
     }
 
-    fn config_to_profile(&self, def: &ProfileConfig) -> Profile {
-        let provider = self
-            .config_to_provider(def)
-            .unwrap_or_else(|| Provider::openai("dummy-key"));
-
-        let profile = Profile::new(def.name.clone()).provider(provider);
-
-        if let Some(model_name) = &def.model {
-            profile.model(ModelId::new(model_name))
-        } else {
-            profile
-        }
+    fn config_to_profile(&self, def: &ProfileYaml) -> Profile {
+        let mut profile = def.profile.clone();
+        profile.provider = self
+            .config_to_provider(&def.config)
+            .unwrap_or_default();
+        profile
     }
 
-    fn config_to_provider(&self, def: &ProfileConfig) -> Option<Provider> {
+    fn config_to_provider(&self, def: &ProviderConfig) -> Option<Provider> {
         let api_key = self.resolve_api_key(def)?;
         let mut provider = match def.provider.as_str() {
             "openai" => Provider::openai(&api_key),
@@ -106,7 +104,7 @@ impl<F: EnvironmentInfra> ForgeProfileService<F> {
         Some(provider)
     }
 
-    fn resolve_api_key(&self, def: &ProfileConfig) -> Option<String> {
+    fn resolve_api_key(&self, def: &ProviderConfig) -> Option<String> {
         if let Some(key) = &def.api_key {
             return Some(key.clone());
         }

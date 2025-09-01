@@ -35,7 +35,7 @@ impl std::fmt::Display for ProfileName {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Setters)]
+#[derive(Debug, Clone, PartialEq, Setters, Serialize, Deserialize)]
 #[setters(strip_option, into)]
 pub struct Profile {
     /// Unique name identifier for this profile
@@ -44,27 +44,34 @@ pub struct Profile {
 
     /// AI provider configuration to use for this profile
     /// Determines which AI service (e.g., OpenAI, Anthropic, etc.) will be used
+    #[serde(skip)]
     pub provider: Provider,
 
     // Fields from Workflow (excluding agents)
     /// Path pattern for custom template files (supports glob patterns)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub templates: Option<String>,
 
     /// Variables that can be used in templates
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub variables: HashMap<String, Value>,
 
     /// configurations that can be used to update forge
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub updates: Option<Update>,
 
     /// Default model ID to use for agents in this workflow
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<ModelId>,
 
     /// Maximum depth to which the file walker should traverse for all agents
     /// If not provided, each agent's individual setting will be used
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_walker_depth: Option<usize>,
 
     /// A set of custom rules that all agents should follow
     /// These rules will be applied in addition to each agent's individual rules
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub custom_rules: Option<String>,
 
     /// Temperature used for all agents
@@ -77,6 +84,7 @@ pub struct Profile {
     /// - Valid range is 0.0 to 2.0
     /// - If not specified, each agent's individual setting or the model
     ///   provider's default will be used
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub temperature: Option<Temperature>,
 
     /// Top-p (nucleus sampling) used for all agents
@@ -88,6 +96,7 @@ pub struct Profile {
     /// - Valid range is 0.0 to 1.0
     /// - If not specified, each agent's individual setting or the model
     ///   provider's default will be used
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub top_p: Option<TopP>,
 
     /// Top-k used for all agents
@@ -98,6 +107,7 @@ pub struct Profile {
     /// - Valid range is 1 to 1000
     /// - If not specified, each agent's individual setting or the model
     ///   provider's default will be used
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub top_k: Option<TopK>,
 
     /// Maximum number of tokens the model can generate for all agents
@@ -108,23 +118,28 @@ pub struct Profile {
     /// - Valid range is 1 to 100,000
     /// - If not specified, each agent's individual setting or the model
     ///   provider's default will be used
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_tokens: Option<MaxTokens>,
 
     /// Flag to enable/disable tool support for all agents in this workflow.
     /// If not specified, each agent's individual setting will be used.
     /// Default is false (tools disabled) when not specified.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_supported: Option<bool>,
 
     /// Maximum number of times a tool can fail before the orchestrator
     /// forces the completion.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_tool_failure_per_turn: Option<usize>,
 
     /// Maximum number of requests that can be made in a single turn
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_requests_per_turn: Option<usize>,
 
     /// Configuration for automatic context compaction for all agents
     /// If specified, this will be applied to all agents in the workflow
     /// If not specified, each agent's individual setting will be used
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub compact: Option<Compact>,
 }
 

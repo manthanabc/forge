@@ -6,25 +6,33 @@ active_profile: Default
 
 profiles:
   - name: Default
-    provider: "openai"
-    # api_key: "sk-..."
-    # base_url: "sk-..."
     model: "gpt-4"
+    temperature: 0.7
+    config:
+      provider: "openai"
+      # api_key: "sk-..."
+      # base_url: "sk-..."
 
   - name: OpenRouter
-    provider: "openrouter"
+    config:
+      provider: "openrouter"
 
   - name: Requesty
-    provider: "requesty"
+    config:
+      provider: "requesty"
 
   - name: Anthropic
-    provider: "anthropic"
+    config:
+      provider: "anthropic"
 
   - name: Xai
-    provider: "xai"
+    config:
+      provider: "xai"
 
   - name: Zai
-    provider: "zai"
+    config:
+      provider: "zai"
 
   - name: Cerebras
-    provider: "cerebras"
+    config:
+      provider: "cerebras"

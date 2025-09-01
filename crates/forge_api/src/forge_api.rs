@@ -12,7 +12,6 @@ use forge_domain::*;
 use forge_infra::ForgeInfra;
 use forge_services::{CommandInfra, ForgeServices};
 use forge_stream::MpscStream;
-use merge::Merge;
 
 use crate::API;
 
@@ -94,11 +93,7 @@ impl<A: Services, F: CommandInfra> API for ForgeAPI<A, F> {
 
     async fn read_merged(&self, path: Option<&Path>) -> anyhow::Result<Workflow> {
         let app = ForgeApp::new(self.services.clone());
-        let mut workflow = app.read_workflow_merged(path).await?;
-        if let Some(profile) = self.services.profile_service().get_active_profile().await? {
-            workflow.merge(profile.to_workflow()?);
-        }
-        Ok(workflow)
+        app.read_workflow_merged(path).await
     }
 
     async fn write_workflow(&self, path: Option<&Path>, workflow: &Workflow) -> anyhow::Result<()> {

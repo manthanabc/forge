@@ -700,15 +700,20 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                     .ok_or(anyhow::anyhow!("Model selection is required to continue"))?,
             );
         }
+        self.api
+            .write_workflow(self.cli.workflow.as_deref(), &workflow)
+            .await?;
+
         let mut base_workflow = Workflow::default();
+        // Load profile and merge with current workflow
+        if let Some(profile) = self.api.get_active_profile().await? {
+            workflow.merge(profile.to_workflow()?);
+        }
         base_workflow.merge(workflow.clone());
         if first {
             // only call on_update if this is the first initialization
             on_update(self.api.clone(), base_workflow.updates.as_ref()).await;
         }
-        self.api
-            .write_workflow(self.cli.workflow.as_deref(), &workflow)
-            .await?;
 
         self.command.register_all(&base_workflow);
         self.state = UIState::new(self.api.environment(), base_workflow).provider(provider);
