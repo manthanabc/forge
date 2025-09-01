@@ -1,9 +1,10 @@
-use std::{fs, io, sync::Arc};
+use std::sync::Arc;
+use std::{fs, io};
 
 use anyhow::Context;
+use forge_app::ProfileService;
 use forge_app::domain::{Provider, ProviderUrl};
 use forge_app::dto::{Profile, ProfileName};
-use forge_app::ProfileService;
 use serde::{Deserialize, Serialize};
 
 use crate::EnvironmentInfra;
@@ -71,9 +72,7 @@ impl<F: EnvironmentInfra> ForgeProfileService<F> {
 
     fn config_to_profile(&self, def: &ProfileYaml) -> Profile {
         let mut profile = def.profile.clone();
-        profile.provider = self
-            .config_to_provider(&def.config)
-            .unwrap_or_default();
+        profile.provider = self.config_to_provider(&def.config).unwrap_or_default();
         profile
     }
 
