@@ -127,28 +127,38 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
 
     async fn on_profile_selection(&mut self) -> Result<()> {
         let profiles = self.api.list_profiles().await?;
-        let provider_option = self.select_profile(profiles.clone()).await?;
 
-        let provider_id = match provider_option {
-            Some(id) => id,
+        let profile = match self.select_profile(profiles.clone()).await? {
+            Some(profile) => profile,
             None => return Ok(()),
         };
 
-        let selected_profile = profiles.iter().find(|p| p.name.as_ref() == provider_id);
+        // Set the active profile
+        self.api.set_active_profile(profile.clone()).await?;
+        self.writeln(format!("✓ Selected profile: {profile}"))?;
 
-        // Set the active provider
-        self.api.set_active_profile(provider_id.clone()).await?;
+        // If no conversation is active, there's nothing to update.
+        let Some(conversation_id) = self.state.conversation_id else {
+            return Ok(());
+        };
 
-        // Refresh the provider state to reflect the change
-        let provider = self.api.provider().await?;
-        self.state.provider = Some(provider);
+        // Re-initialize the API to use the new profile's provider.
+        self.api = Arc::new((self.new_api)());
+        let new_workflow = self.init_state(false).await?;
 
-        // Load the default model from the profile if specified
-
-        if let Some(model_name) = selected_profile.and_then(|p| p.model.as_ref()) {
-            self.update_model_state(model_name.clone()).await?;
+        // Fetch the current conversation, update it with the new workflow, and save it.
+        if let Some(mut conversation) = self.api.conversation(&conversation_id).await? {
+            let additional_tools = self
+                .api
+                .tools()
+                .await?
+                .into_iter()
+                .map(|t| t.name)
+                .collect::<Vec<_>>();
+            conversation.update_from_workflow(new_workflow, additional_tools);
+            self.api.upsert_conversation(conversation.clone()).await?;
+            self.update_model(conversation.main_model()?);
         }
-        self.writeln(format!("✓ Selected profile: {provider_id}"))?;
 
         Ok(())
     }
@@ -693,7 +703,15 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
     async fn init_state(&mut self, first: bool) -> Result<Workflow> {
         let provider = self.init_provider().await?;
         let mut workflow = self.api.read_workflow(self.cli.workflow.as_deref()).await?;
-        if workflow.model.is_none() {
+
+        let mut base_workflow = Workflow::default();
+        base_workflow.merge(workflow.clone());
+
+        if let Some(profile) = self.api.get_active_profile().await? {
+            base_workflow.merge(profile.to_workflow()?);
+        }
+
+        if base_workflow.model.is_none() {
             workflow.model = Some(
                 self.select_model()
                     .await?
@@ -704,21 +722,15 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             .write_workflow(self.cli.workflow.as_deref(), &workflow)
             .await?;
 
-        let mut base_workflow = Workflow::default();
-        // Load profile and merge with current workflow
-        if let Some(profile) = self.api.get_active_profile().await? {
-            workflow.merge(profile.to_workflow()?);
-        }
-        base_workflow.merge(workflow.clone());
         if first {
             // only call on_update if this is the first initialization
             on_update(self.api.clone(), base_workflow.updates.as_ref()).await;
         }
 
         self.command.register_all(&base_workflow);
-        self.state = UIState::new(self.api.environment(), base_workflow).provider(provider);
+        self.state = UIState::new(self.api.environment(), base_workflow.clone()).provider(provider);
 
-        Ok(workflow)
+        Ok(base_workflow)
     }
     async fn init_provider(&mut self) -> Result<Provider> {
         self.api.provider().await

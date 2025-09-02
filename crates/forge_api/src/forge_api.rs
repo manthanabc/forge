@@ -197,6 +197,7 @@ impl<A: Services, F: CommandInfra> API for ForgeAPI<A, F> {
             .profile_service()
             .set_active_profile(profile_name.into())
             .await?;
+
         // Clear model and provider cache
         self.services.clear_provider_cache().await;
         self.services.clear_model_cache().await;
