@@ -454,6 +454,9 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             Command::Muse => {
                 self.on_agent_change(AgentId::MUSE).await?;
             }
+            Command::Sage => {
+                self.on_agent_change(AgentId::SAGE).await?;
+            }
             Command::Help => {
                 let info = Info::from(self.command.as_ref());
                 self.writeln(info)?;
@@ -877,12 +880,9 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                     return Ok(());
                 }
             }
-            ChatResponse::Usage(mut usage) => {
-                // accumulate the cost
-                usage.cost = usage
-                    .cost
-                    .map(|cost| cost + self.state.usage.cost.as_ref().map_or(0.0, |c| *c));
-                self.state.usage = usage;
+            ChatResponse::Usage(usage) => {
+                // Accumulate all metrics (tokens + cost) instead of overwriting
+                self.state.usage = self.state.usage.clone().accumulate(&usage);
             }
             ChatResponse::RetryAttempt { cause, duration: _ } => {
                 if !self.api.environment().retry_config.suppress_retry_errors {
