@@ -35,13 +35,23 @@ impl<F: EnvironmentInfra, P: ProfileService> ForgeProviderRegistry<F, P> {
 
     async fn resolve_provider(&self) -> Option<Provider> {
         // First, try to find the explicitly active provider
-        if let Some(active_profile) = self.profile_service.get_active_profile().await.ok()? {
-            return Some(active_profile.provider);
+        if let Some(profile) = self
+            .profile_service
+            .get_active_profile()
+            .await
+            .ok()
+            .flatten()
+        {
+            return Some(profile.provider);
         }
-
         // If no active provider, try to find the first one that can be configured
         // otherwise fallback to env provider
-        let profiles = self.profile_service.list_profiles().await.ok()?;
+        let profiles = self
+            .profile_service
+            .list_profiles()
+            .await
+            .ok()
+            .unwrap_or(vec![]);
         profiles
             .into_iter()
             .find_map(|p| p.provider.key().map(|_| p.provider.clone()))

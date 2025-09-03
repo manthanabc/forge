@@ -36,7 +36,7 @@ impl<S: Services> WorkflowManager<S> {
     }
     pub async fn read_merged(&self, path: Option<&Path>) -> anyhow::Result<Workflow> {
         let mut workflow = self.service.read_merged(path).await?;
-        if let Some(profile) = self.service.profile_service().get_active_profile().await? {
+        if let Ok(Some(profile)) = self.service.profile_service().get_active_profile().await {
             workflow.merge(profile.to_workflow()?);
         }
         workflow = self.extend_agents(workflow).await?;

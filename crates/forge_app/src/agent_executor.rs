@@ -10,9 +10,8 @@ use futures::StreamExt;
 use tokio::sync::RwLock;
 
 use crate::error::Error;
-use crate::services::WorkflowService;
 use crate::workflow_manager::WorkflowManager;
-use crate::{ConversationService, Services};
+use crate::{ConversationService, Services, WorkflowService};
 
 #[derive(Clone)]
 pub struct AgentExecutor<S> {

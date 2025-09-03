@@ -136,19 +136,13 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
         // Set the active profile
         self.api.set_active_profile(profile.clone()).await?;
         self.writeln(format!("✓ Selected profile: {profile}"))?;
-
-        // Re-initialize the API to use the new profile's provider.
-        self.api = Arc::new((self.new_api)());
         let new_workflow = self.api.read_merged(self.cli.workflow.as_deref()).await?;
 
         if let Some(ref model) = new_workflow.model {
             self.update_model(model.clone());
         }
 
-        // If no conversation is active, there's nothing to update.
-        let Some(conversation_id) = self.state.conversation_id else {
-            return Ok(());
-        };
+        let conversation_id = self.init_conversation().await?;
 
         // Fetch the current conversation, update it with the new workflow, and save it.
         if let Some(mut conversation) = self.api.conversation(&conversation_id).await? {
@@ -710,7 +704,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
         let mut base_workflow = Workflow::default();
         base_workflow.merge(workflow.clone());
 
-        if let Some(profile) = self.api.get_active_profile().await? {
+        if let Ok(Some(profile)) = self.api.get_active_profile().await {
             base_workflow.merge(profile.to_workflow()?);
         }
 

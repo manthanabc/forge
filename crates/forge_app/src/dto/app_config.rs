@@ -9,8 +9,6 @@ pub struct InitAuth {
     pub token: String,
 }
 
-/// Local configuration that is managed by Forge. This should not contain any
-/// information that would require user intervention.
 #[derive(Default, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppConfig {
