@@ -139,7 +139,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
 
         // Re-initialize the API to use the new profile's provider.
         self.api = Arc::new((self.new_api)());
-        let new_workflow = self.init_state(false).await?;
+        let new_workflow = self.api.read_merged(self.cli.workflow.as_deref()).await?;
 
         if let Some(ref model) = new_workflow.model {
             self.update_model(model.clone());
