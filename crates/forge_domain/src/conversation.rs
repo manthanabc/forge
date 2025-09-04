@@ -208,13 +208,13 @@ impl Conversation {
             agents.push(agent);
         }
 
-        self.variables = workflow.variables.clone();
         self.agents = agents;
         self.max_tool_failure_per_turn = workflow.max_tool_failure_per_turn;
         self.max_requests_per_turn = workflow.max_requests_per_turn;
     }
 
     fn new_inner(id: ConversationId, workflow: Workflow, additional_tools: Vec<ToolName>) -> Self {
+        let agents = Vec::new();
         let mut metrics = Metrics::new();
         metrics.start();
 
@@ -223,7 +223,7 @@ impl Conversation {
             archived: false,
             context: None,
             variables: Default::default(),
-            agents: Default::default(),
+            agents,
             events: Default::default(),
             max_tool_failure_per_turn: None,
             max_requests_per_turn: None,
@@ -327,10 +327,7 @@ impl Conversation {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
     use pretty_assertions::assert_eq;
-    use serde_json::json;
 
     use crate::{
         Agent, AgentId, Command, Compact, Error, MaxTokens, ModelId, Temperature, Workflow,
@@ -352,25 +349,6 @@ mod tests {
         assert!(conversation.variables.is_empty());
         assert!(conversation.agents.is_empty());
         assert!(conversation.events.is_empty());
-    }
-
-    #[test]
-    fn test_conversation_new_with_workflow_variables() {
-        // Arrange
-        let id = super::ConversationId::generate();
-        let mut variables = HashMap::new();
-        variables.insert("key1".to_string(), json!("value1"));
-        variables.insert("key2".to_string(), json!(42));
-
-        let mut workflow = Workflow::new();
-        workflow.variables = variables.clone();
-
-        // Act
-        let conversation = super::Conversation::new_inner(id.clone(), workflow, vec![]);
-
-        // Assert
-        assert_eq!(conversation.id, id);
-        assert_eq!(conversation.variables, variables);
     }
 
     #[test]

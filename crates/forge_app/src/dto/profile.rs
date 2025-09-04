@@ -1,11 +1,8 @@
-use std::collections::HashMap;
-
 use derive_setters::Setters;
 use forge_domain::{
     Compact, MaxTokens, ModelId, Provider, Temperature, TopK, TopP, Update, Workflow,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -51,10 +48,6 @@ pub struct Profile {
     /// Path pattern for custom template files (supports glob patterns)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub templates: Option<String>,
-
-    /// Variables that can be used in templates
-    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
-    pub variables: HashMap<String, Value>,
 
     /// configurations that can be used to update forge
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -149,7 +142,6 @@ impl Profile {
             name: name.into(),
             provider: Provider::default(),
             templates: Default::default(),
-            variables: Default::default(),
             updates: Default::default(),
             model: Default::default(),
             max_walker_depth: Default::default(),
@@ -168,7 +160,6 @@ impl Profile {
     pub fn to_workflow(&self) -> anyhow::Result<Workflow> {
         Ok(Workflow {
             templates: self.templates.clone(),
-            variables: self.variables.clone(),
             updates: self.updates.clone(),
             model: self.model.clone(),
             max_walker_depth: self.max_walker_depth,

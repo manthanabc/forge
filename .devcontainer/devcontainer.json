@@ -1,7 +1,8 @@
 {
-  "image": "mcr.microsoft.com/devcontainers/universal:2",
+  "image": "mcr.microsoft.com/devcontainers/rust:1-1-bullseye",
+  "remoteUser": "vscode",
+  "updateRemoteUserUID": true,
   "features": {
-    "ghcr.io/devcontainers/features/rust:1": {},
     "ghcr.io/devcontainers/features/node:1": {
       "version": "lts"
     },
@@ -9,34 +10,30 @@
     "ghcr.io/devcontainers/features/git:1": {
       "ppa": true,
       "version": "latest"
+    },
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": true,
+      "installOhMyZsh": true,
+      "upgradePackages": true,
+      "username": "vscode",
+      "uid": "automatic",
+      "gid": "automatic"
     }
+  },
+  "containerEnv": {
+    "SHELL": "/usr/bin/zsh"
   },
   "customizations": {
     "vscode": {
-      "extensions": [
-        "rust-lang.rust-analyzer",
-        "vadimcn.vscode-lldb",
-        "serayuzgur.crates",
-        "tamasfe.even-better-toml",
-        "GitHub.vscode-github-actions",
-        "ms-vscode.vscode-json"
-      ],
       "settings": {
         "terminal.integrated.defaultProfile.linux": "zsh",
         "terminal.integrated.profiles.linux": {
           "zsh": {
             "path": "/usr/bin/zsh"
           }
-        },
-        "rust-analyzer.cargo.buildScripts.enable": true,
-        "rust-analyzer.checkOnSave.command": "clippy",
-        "rust-analyzer.rustfmt.rangeFormatting.enable": true,
-        "[rust]": {
-          "editor.defaultFormatter": "rust-lang.rust-analyzer",
-          "editor.formatOnSave": true
         }
       }
     }
   },
-  "postCreateCommand": "rustup component add clippy rustfmt && cargo install cargo-insta"
+  "postCreateCommand": "npm i -g forgecode && rustup component add clippy rustfmt && cargo install cargo-insta && chsh -s /usr/bin/zsh"
 }
