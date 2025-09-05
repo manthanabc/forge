@@ -378,7 +378,7 @@ impl ToolOperation {
                 forge_domain::ToolOutput::text(elm)
             }
             ToolOperation::FsUndo { input, output } => {
-                // Diff between previous snapshot state (after_undo) and modified state
+                // Diff between snapshot state (after_undo) and modified state
                 // (before_undo)
                 let diff = DiffFormat::format(
                     output.after_undo.as_deref().unwrap_or(""),
@@ -419,7 +419,7 @@ impl ToolOperation {
                         forge_domain::ToolOutput::text(elm)
                     }
                     (Some(before), Some(after)) => {
-                        // This diff is between modified state (before_undo) and previous snapshot
+                        // This diff is between modified state (before_undo) and snapshot
                         // state (after_undo)
                         let diff = DiffFormat::format(before, after);
 
