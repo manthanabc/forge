@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
-use forge_app::dto::{AppConfig, InitAuth};
+use forge_app::dto::{AppConfig, InitAuth, ToolsOverview};
 use forge_app::{User, UserUsage};
 use forge_domain::AgentId;
 use forge_stream::MpscStream;
@@ -16,10 +16,12 @@ pub trait API: Sync + Send {
 
     /// Provides information about the tools available in the current
     /// environment
-    async fn tools(&self) -> anyhow::Result<Vec<ToolDefinition>>;
+    async fn tools(&self) -> anyhow::Result<ToolsOverview>;
 
     /// Provides a list of models available in the current environment
     async fn models(&self) -> Result<Vec<Model>>;
+    /// Provides a list of agents available in the current environment
+    async fn get_agents(&self) -> Result<Vec<Agent>>;
 
     /// Executes a chat request and returns a stream of responses
     async fn chat(&self, chat: ChatRequest) -> Result<MpscStream<Result<ChatResponse>>>;

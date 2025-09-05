@@ -66,15 +66,14 @@ pub struct AgentInput {
 }
 
 /// Reads file contents from the specified absolute path. Ideal for analyzing
-/// code, configuration files, documentation, or textual data. Automatically
-/// extracts text from PDF and DOCX files, preserving the original formatting.
-/// Returns the content as a string. For files larger than 2,000 lines,
-/// the tool automatically returns only the first 2,000 lines. You should
-/// always rely on this default behavior and avoid specifying custom ranges
-/// unless absolutely necessary. If needed, specify a range with the start_line
-/// and end_line parameters, ensuring the total range does not exceed 2,000
-/// lines. Specifying a range exceeding this limit will result in an error.
-/// Binary files are automatically detected and rejected.
+/// code, configuration files, documentation, or textual data. Returns the
+/// content as a string. For files larger than 2,000 lines, the tool
+/// automatically returns only the first 2,000 lines. You should always rely
+/// on this default behavior and avoid specifying custom ranges unless
+/// absolutely necessary. If needed, specify a range with the start_line and
+/// end_line parameters, ensuring the total range does not exceed 2,000 lines.
+/// Specifying a range exceeding this limit will result in an error. Binary
+/// files are automatically detected and rejected.
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
 pub struct FSRead {
     /// The path of the file to read, always provide absolute paths.
@@ -231,8 +230,8 @@ impl JsonSchema for PatchOperation {
 /// prepend, append, replace, replace_all, swap, delete
 /// operations. Ideal for precise changes to configs, code, or docs while
 /// preserving context. Not suitable for complex refactoring or modifying all
-/// pattern occurrences - use `forge_tool_fs_create` instead for complete
-/// rewrites and `forge_tool_fs_undo` for undoing the last operation. Fails if
+/// pattern occurrences - use `write` instead for complete
+/// rewrites and `undo` for undoing the last operation. Fails if
 /// search pattern isn't found.
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema, ToolDescription, PartialEq)]
 pub struct FSPatch {
@@ -732,7 +731,7 @@ mod tests {
     #[test]
     fn test_is_complete() {
         let complete_tool = ToolName::new("attempt_completion");
-        let incomplete_tool = ToolName::new("forge_tool_fs_read");
+        let incomplete_tool = ToolName::new("read");
 
         assert!(Tools::is_attempt_completion(&complete_tool));
         assert!(!Tools::is_attempt_completion(&incomplete_tool));

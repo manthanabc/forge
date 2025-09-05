@@ -7,7 +7,7 @@ use colored::Colorize;
 use convert_case::{Case, Casing};
 use forge_api::{
     API, AgentId, AppConfig, ChatRequest, ChatResponse, Conversation, ConversationId, Event,
-    InterruptionReason, Model, ModelId, Workflow,
+    InterruptionReason, Model, ModelId, ToolName, Workflow,
 };
 use forge_display::MarkdownFormat;
 use forge_domain::{
@@ -97,20 +97,17 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
         Ok(())
     }
 
-    async fn active_workflow(&self) -> Result<Workflow> {
-        // Read the current workflow to validate the agent
-        let workflow = self.api.read_workflow(self.cli.workflow.as_deref()).await?;
-        let mut base_workflow = Workflow::default();
-        base_workflow.merge(workflow.clone());
-        Ok(base_workflow)
-    }
-
     // Set the current mode and update conversation variable
     async fn on_agent_change(&mut self, agent_id: AgentId) -> Result<()> {
-        let workflow = self.active_workflow().await?;
-
         // Convert string to AgentId for validation
-        let agent = workflow.get_agent(&AgentId::new(agent_id))?;
+        let agent = self
+            .api
+            .get_agents()
+            .await?
+            .iter()
+            .find(|agent| agent.id == agent_id)
+            .cloned()
+            .ok_or(anyhow::anyhow!("Undefined agent: {agent_id}"))?;
 
         let conversation_id = self.init_conversation().await?;
         if let Some(mut conversation) = self.api.conversation(&conversation_id).await? {
@@ -355,6 +352,17 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
         Ok(())
     }
 
+    async fn agent_tools(&self) -> anyhow::Result<Vec<ToolName>> {
+        let agent_id = &self.state.operating_agent;
+        let agents = self.api.get_agents().await?;
+        let agent = agents.into_iter().find(|agent| &agent.id == agent_id);
+        Ok(agent
+            .and_then(|agent| agent.tools.clone())
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>())
+    }
+
     async fn on_command(&mut self, command: Command) -> anyhow::Result<bool> {
         match command {
             Command::Compact => {
@@ -394,10 +402,10 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             Command::Tools => {
                 self.spinner.start(Some("Loading"))?;
                 use crate::tools_display::format_tools;
-                let tools = self.api.tools().await?;
-
-                let output = format_tools(&tools);
-                self.writeln(output)?;
+                let all_tools = self.api.tools().await?;
+                let agent_tools = self.agent_tools().await?;
+                let info = format_tools(&agent_tools, &all_tools);
+                self.writeln(info)?;
             }
             Command::Update => {
                 on_update(self.api.clone(), None).await;
@@ -417,9 +425,6 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 self.api.execute_shell_command_raw(command).await?;
             }
             Command::Agent => {
-                // Read the current workflow to validate the agent
-                let workflow = self.active_workflow().await?;
-
                 #[derive(Clone)]
                 struct Agent {
                     id: AgentId,
@@ -431,14 +436,14 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                         write!(f, "{}", self.label)
                     }
                 }
-                let n = workflow
-                    .agents
+
+                let agents = self.api.get_agents().await?;
+                let n = agents
                     .iter()
                     .map(|a| a.id.as_str().len())
                     .max()
                     .unwrap_or_default();
-                let display_agents = workflow
-                    .agents
+                let display_agents = agents
                     .into_iter()
                     .map(|agent| {
                         let title = &agent.title.unwrap_or("<Missing agent.title>".to_string());
@@ -642,9 +647,8 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             .await?;
 
         self.command.register_all(&base_workflow);
-        let operating_agent = self.api.get_operating_agent().await;
-        self.state =
-            UIState::new(self.api.environment(), base_workflow, operating_agent).provider(provider);
+        let agent = self.api.get_operating_agent().await.unwrap_or_default();
+        self.state = UIState::new(self.api.environment(), base_workflow, agent).provider(provider);
 
         Ok(workflow)
     }

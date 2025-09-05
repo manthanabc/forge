@@ -600,7 +600,7 @@ mod tests {
         let env = fixture_environment();
 
         let actual = fixture.into_tool_output(
-            ToolName::new("forge_tool_fs_read"),
+            ToolName::new("read"),
             TempContentFiles::default(),
             &env,
             &mut Metrics::new(),
@@ -629,7 +629,7 @@ mod tests {
         let env = fixture_environment();
 
         let actual = fixture.into_tool_output(
-            ToolName::new("forge_tool_fs_read"),
+            ToolName::new("read"),
             TempContentFiles::default(),
             &env,
             &mut Metrics::new(),
@@ -658,7 +658,7 @@ mod tests {
         let env = fixture_environment();
 
         let actual = fixture.into_tool_output(
-            ToolName::new("forge_tool_fs_read"),
+            ToolName::new("read"),
             TempContentFiles::default(),
             &env,
             &mut Metrics::new(),
@@ -689,7 +689,7 @@ mod tests {
             TempContentFiles::default().stdout(PathBuf::from("/tmp/truncated_content.txt"));
 
         let actual = fixture.into_tool_output(
-            ToolName::new("forge_tool_fs_read"),
+            ToolName::new("read"),
             truncation_path,
             &env,
             &mut Metrics::new(),
@@ -717,7 +717,7 @@ mod tests {
         let env = fixture_environment();
 
         let actual = fixture.into_tool_output(
-            ToolName::new("forge_tool_fs_create"),
+            ToolName::new("write"),
             TempContentFiles::default(),
             &env,
             &mut Metrics::new(),
@@ -744,7 +744,7 @@ mod tests {
 
         let env = fixture_environment();
         let actual = fixture.into_tool_output(
-            ToolName::new("forge_tool_fs_create"),
+            ToolName::new("write"),
             TempContentFiles::default(),
             &env,
             &mut Metrics::new(),
@@ -769,7 +769,7 @@ mod tests {
 
         let env = fixture_environment();
         let actual = fixture.into_tool_output(
-            ToolName::new("forge_tool_fs_create"),
+            ToolName::new("write"),
             TempContentFiles::default(),
             &env,
             &mut Metrics::new(),
@@ -803,7 +803,7 @@ mod tests {
         let truncation_path =
             TempContentFiles::default().stdout(PathBuf::from("/tmp/stdout_content.txt"));
         let actual = fixture.into_tool_output(
-            ToolName::new("forge_tool_process_shell"),
+            ToolName::new("shell"),
             truncation_path,
             &env,
             &mut Metrics::new(),
@@ -837,7 +837,7 @@ mod tests {
         let truncation_path =
             TempContentFiles::default().stderr(PathBuf::from("/tmp/stderr_content.txt"));
         let actual = fixture.into_tool_output(
-            ToolName::new("forge_tool_process_shell"),
+            ToolName::new("shell"),
             truncation_path,
             &env,
             &mut Metrics::new(),
@@ -878,7 +878,7 @@ mod tests {
             .stdout(PathBuf::from("/tmp/stdout_content.txt"))
             .stderr(PathBuf::from("/tmp/stderr_content.txt"));
         let actual = fixture.into_tool_output(
-            ToolName::new("forge_tool_process_shell"),
+            ToolName::new("shell"),
             truncation_path,
             &env,
             &mut Metrics::new(),
@@ -910,7 +910,7 @@ mod tests {
 
         let env = fixture_environment();
         let actual = fixture.into_tool_output(
-            ToolName::new("forge_tool_process_shell"),
+            ToolName::new("shell"),
             TempContentFiles::default(),
             &env,
             &mut Metrics::new(),
@@ -935,7 +935,7 @@ mod tests {
 
         let env = fixture_environment();
         let actual = fixture.into_tool_output(
-            ToolName::new("forge_tool_process_shell"),
+            ToolName::new("shell"),
             TempContentFiles::default(),
             &env,
             &mut Metrics::new(),
@@ -960,7 +960,7 @@ mod tests {
 
         let env = fixture_environment();
         let actual = fixture.into_tool_output(
-            ToolName::new("forge_tool_process_shell"),
+            ToolName::new("shell"),
             TempContentFiles::default(),
             &env,
             &mut Metrics::new(),
@@ -1001,7 +1001,7 @@ mod tests {
             .stdout(PathBuf::from("/tmp/stdout_content.txt"))
             .stderr(PathBuf::from("/tmp/stderr_content.txt"));
         let actual = fixture.into_tool_output(
-            ToolName::new("forge_tool_process_shell"),
+            ToolName::new("shell"),
             truncation_path,
             &env,
             &mut Metrics::new(),
@@ -1040,7 +1040,7 @@ mod tests {
         let env = fixture_environment(); // max_search_lines is 25
 
         let actual = fixture.into_tool_output(
-            ToolName::new("forge_tool_fs_search"),
+            ToolName::new("search"),
             TempContentFiles::default(),
             &env,
             &mut Metrics::new(),
@@ -1081,7 +1081,7 @@ mod tests {
         env.max_search_lines = 10;
 
         let actual = fixture.into_tool_output(
-            ToolName::new("forge_tool_fs_search"),
+            ToolName::new("search"),
             TempContentFiles::default(),
             &env,
             &mut Metrics::new(),
@@ -1124,7 +1124,7 @@ mod tests {
         env.max_search_result_bytes = max_bytes.ceil() as usize; // limit to 0.001 MB
 
         let actual = fixture.into_tool_output(
-            ToolName::new("forge_tool_fs_search"),
+            ToolName::new("search"),
             TempContentFiles::default(),
             &env,
             &mut Metrics::new(),
@@ -1170,7 +1170,7 @@ mod tests {
         env.max_search_result_bytes = max_bytes.ceil() as usize; // limit to 0.001 MB
 
         let actual = fixture.into_tool_output(
-            ToolName::new("forge_tool_fs_search"),
+            ToolName::new("search"),
             TempContentFiles::default(),
             &env,
             &mut Metrics::new(),
@@ -1196,7 +1196,7 @@ mod tests {
         let env = fixture_environment();
 
         let actual = fixture.into_tool_output(
-            ToolName::new("forge_tool_fs_search"),
+            ToolName::new("search"),
             TempContentFiles::default(),
             &env,
             &mut Metrics::new(),
@@ -1224,7 +1224,7 @@ mod tests {
         let env = fixture_environment();
 
         let actual = fixture.into_tool_output(
-            ToolName::new("forge_tool_fs_create"),
+            ToolName::new("write"),
             TempContentFiles::default(),
             &env,
             &mut Metrics::new(),
@@ -1246,7 +1246,7 @@ mod tests {
         let env = fixture_environment();
 
         let actual = fixture.into_tool_output(
-            ToolName::new("forge_tool_fs_remove"),
+            ToolName::new("remove"),
             TempContentFiles::default(),
             &env,
             &mut Metrics::new(),
@@ -1289,7 +1289,7 @@ mod tests {
         let env = fixture_environment();
 
         let actual = fixture.into_tool_output(
-            ToolName::new("forge_tool_fs_search"),
+            ToolName::new("search"),
             TempContentFiles::default(),
             &env,
             &mut Metrics::new(),
@@ -1315,7 +1315,7 @@ mod tests {
         let env = fixture_environment();
 
         let actual = fixture.into_tool_output(
-            ToolName::new("forge_tool_fs_search"),
+            ToolName::new("search"),
             TempContentFiles::default(),
             &env,
             &mut Metrics::new(),
@@ -1344,7 +1344,7 @@ mod tests {
         let env = fixture_environment();
 
         let actual = fixture.into_tool_output(
-            ToolName::new("forge_tool_fs_patch"),
+            ToolName::new("patch"),
             TempContentFiles::default(),
             &env,
             &mut Metrics::new(),
@@ -1373,7 +1373,7 @@ mod tests {
         let env = fixture_environment();
 
         let actual = fixture.into_tool_output(
-            ToolName::new("forge_tool_fs_patch"),
+            ToolName::new("patch"),
             TempContentFiles::default(),
             &env,
             &mut Metrics::new(),
@@ -1395,7 +1395,7 @@ mod tests {
         let env = fixture_environment();
 
         let actual = fixture.into_tool_output(
-            ToolName::new("forge_tool_fs_undo"),
+            ToolName::new("undo"),
             TempContentFiles::default(),
             &env,
             &mut Metrics::new(),
@@ -1420,7 +1420,7 @@ mod tests {
         let env = fixture_environment();
 
         let actual = fixture.into_tool_output(
-            ToolName::new("forge_tool_fs_undo"),
+            ToolName::new("undo"),
             TempContentFiles::default(),
             &env,
             &mut Metrics::new(),
@@ -1447,7 +1447,7 @@ mod tests {
         let env = fixture_environment();
 
         let actual = fixture.into_tool_output(
-            ToolName::new("forge_tool_fs_undo"),
+            ToolName::new("undo"),
             TempContentFiles::default(),
             &env,
             &mut Metrics::new(),
@@ -1472,7 +1472,7 @@ mod tests {
         let env = fixture_environment();
 
         let actual = fixture.into_tool_output(
-            ToolName::new("forge_tool_fs_undo"),
+            ToolName::new("undo"),
             TempContentFiles::default(),
             &env,
             &mut Metrics::new(),
@@ -1497,7 +1497,7 @@ mod tests {
         let env = fixture_environment();
 
         let actual = fixture.into_tool_output(
-            ToolName::new("forge_tool_fs_undo"),
+            ToolName::new("undo"),
             TempContentFiles::default(),
             &env,
             &mut Metrics::new(),
@@ -1525,7 +1525,7 @@ mod tests {
         let env = fixture_environment();
 
         let actual = fixture.into_tool_output(
-            ToolName::new("forge_tool_net_fetch"),
+            ToolName::new("fetch"),
             TempContentFiles::default(),
             &env,
             &mut Metrics::new(),
@@ -1561,7 +1561,7 @@ mod tests {
             TempContentFiles::default().stdout(PathBuf::from("/tmp/forge_fetch_abc123.txt"));
 
         let actual = fixture.into_tool_output(
-            ToolName::new("forge_tool_net_fetch"),
+            ToolName::new("fetch"),
             truncation_path,
             &env,
             &mut Metrics::new(),
@@ -1597,7 +1597,7 @@ mod tests {
         let env = fixture_environment();
 
         let actual = fixture.into_tool_output(
-            ToolName::new("forge_tool_process_shell"),
+            ToolName::new("shell"),
             TempContentFiles::default(),
             &env,
             &mut Metrics::new(),
@@ -1631,7 +1631,7 @@ mod tests {
         let env = fixture_environment();
 
         let actual = fixture.into_tool_output(
-            ToolName::new("forge_tool_followup"),
+            ToolName::new("followup"),
             TempContentFiles::default(),
             &env,
             &mut Metrics::new(),
@@ -1647,7 +1647,7 @@ mod tests {
         let env = fixture_environment();
 
         let actual = fixture.into_tool_output(
-            ToolName::new("forge_tool_followup"),
+            ToolName::new("followup"),
             TempContentFiles::default(),
             &env,
             &mut Metrics::new(),
