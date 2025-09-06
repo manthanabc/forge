@@ -112,4 +112,48 @@ mod tests {
         assert_eq!(file1_metrics.lines_added, 15);
         assert_eq!(file1_metrics.lines_removed, 6);
     }
+
+    #[test]
+    fn test_metrics_record_file_operation_and_undo() {
+        let mut metrics = Metrics::new();
+        let path = "file_to_track.rs".to_string();
+
+        // Do operation
+        metrics.record_file_operation(path.clone(), 2, 1);
+        let changes = metrics.files_changed.get(&path).unwrap();
+        assert_eq!(metrics.files_changed.len(), 1);
+        assert_eq!(changes.lines_added, 2);
+        assert_eq!(changes.lines_removed, 1);
+
+        // Undo operation
+        metrics.record_file_undo(path.clone(), 2, 1);
+        let changes = metrics.files_changed.get(&path).unwrap();
+        assert_eq!(changes.lines_added, 0);
+        assert_eq!(changes.lines_removed, 0);
+    }
+
+    #[test]
+    fn test_metrics_record_multiple_file_operations_and_undo() {
+        let mut metrics = Metrics::new();
+        let path = "file1.rs".to_string();
+
+        metrics.record_file_operation(path.clone(), 10, 5);
+        metrics.record_file_operation(path.clone(), 5, 1);
+
+        let metric1 = metrics.files_changed.get(&path).unwrap();
+        assert_eq!(metric1.lines_added, 15);
+        assert_eq!(metric1.lines_removed, 6);
+
+        // Undo operation on file1 (undoing the second operation: 5 added, 1 removed)
+        metrics.record_file_undo(path.clone(), 5, 1);
+        let file1_metrics_after_undo1 = metrics.files_changed.get(&path).unwrap();
+        assert_eq!(file1_metrics_after_undo1.lines_added, 10);
+        assert_eq!(file1_metrics_after_undo1.lines_removed, 5);
+
+        // Undo operation on file1 (undoing the first operation: 10 added, 5 removed)
+        metrics.record_file_undo(path.clone(), 10, 5);
+        let file1_metrics_after_undo2 = metrics.files_changed.get(&path).unwrap();
+        assert_eq!(file1_metrics_after_undo2.lines_added, 0);
+        assert_eq!(file1_metrics_after_undo2.lines_removed, 0);
+    }
 }
