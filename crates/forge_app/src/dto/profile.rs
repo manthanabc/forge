@@ -173,7 +173,6 @@ impl Profile {
             max_requests_per_turn: self.max_requests_per_turn,
             compact: self.compact.clone(),
             // Agents and commands are not part of a profile, so they are empty
-            agents: Vec::new(),
             commands: Vec::new(),
         })
     }

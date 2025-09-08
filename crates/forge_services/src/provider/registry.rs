@@ -52,6 +52,7 @@ impl<F: EnvironmentInfra, P: ProfileService> ForgeProviderRegistry<F, P> {
             .await
             .ok()
             .unwrap_or(vec![]);
+
         profiles
             .into_iter()
             .find_map(|p| p.provider.key().map(|_| p.provider.clone()))

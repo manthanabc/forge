@@ -7,11 +7,12 @@ use forge_domain::{
 };
 use forge_template::Element;
 use futures::StreamExt;
+use merge::Merge;
 use tokio::sync::RwLock;
 
 use crate::error::Error;
-use crate::workflow_manager::WorkflowManager;
-use crate::{ConversationService, Services, WorkflowService};
+use crate::services::ProfileService;
+use crate::{AgentLoaderService, ConversationService, Services, WorkflowService};
 
 #[derive(Clone)]
 pub struct AgentExecutor<S> {
@@ -25,15 +26,14 @@ impl<S: Services> AgentExecutor<S> {
     }
 
     /// Returns a list of tool definitions for all available agents.
-    pub async fn tool_agents(&self) -> anyhow::Result<Vec<ToolDefinition>> {
+    pub async fn agent_definitions(&self) -> anyhow::Result<Vec<ToolDefinition>> {
         if let Some(tool_agents) = self.tool_agents.read().await.clone() {
             return Ok(tool_agents);
         }
-        let workflow = self.services.read_merged(None).await?;
-
-        let agents: Vec<ToolDefinition> = workflow.agents.into_iter().map(Into::into).collect();
-        *self.tool_agents.write().await = Some(agents.clone());
-        Ok(agents)
+        let agents = self.services.get_agents().await?;
+        let tools: Vec<ToolDefinition> = agents.into_iter().map(Into::into).collect();
+        *self.tool_agents.write().await = Some(tools.clone());
+        Ok(tools)
     }
 
     /// Executes an agent tool call by creating a new chat request for the
@@ -54,10 +54,14 @@ impl<S: Services> AgentExecutor<S> {
         .await?;
 
         // Create a new conversation for agent execution
-        let workflow_manager = WorkflowManager::new(self.services.clone());
-        let workflow = workflow_manager.read_merged(None).await?;
+        let mut workflow = self.services.read_merged(None).await?;
+        if let Some(profile) = self.services.get_active_profile().await? {
+            workflow.merge(profile.to_workflow()?);
+        }
+        let agents = self.services.get_agents().await?;
         let conversation =
-            ConversationService::create_conversation(self.services.as_ref(), workflow).await?;
+            ConversationService::init_conversation(self.services.as_ref(), workflow, agents)
+                .await?;
 
         // Execute the request through the ForgeApp
         let app = crate::ForgeApp::new(self.services.clone());
@@ -101,7 +105,7 @@ impl<S: Services> AgentExecutor<S> {
     }
 
     pub async fn contains_tool(&self, tool_name: &ToolName) -> anyhow::Result<bool> {
-        let agent_tools = self.tool_agents().await?;
+        let agent_tools = self.agent_definitions().await?;
         Ok(agent_tools.iter().any(|tool| tool.name == *tool_name))
     }
 }

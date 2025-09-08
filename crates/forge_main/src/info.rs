@@ -219,9 +219,9 @@ impl fmt::Display for Info {
                 }
                 Section::Items(key, value) => {
                     if let Some(value) = value {
-                        writeln!(f, "{}: {}", key.bright_cyan().bold(), value)?;
+                        writeln!(f, "  {}: {}", key.bright_cyan().bold(), value)?;
                     } else {
-                        writeln!(f, "{key}")?;
+                        writeln!(f, "  {key}")?;
                     }
                 }
             }
