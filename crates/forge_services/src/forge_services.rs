@@ -61,7 +61,7 @@ pub struct ForgeServices<F: HttpInfra + EnvironmentInfra + McpServerInfra + Walk
     custom_instructions_service: Arc<ForgeCustomInstructionsService<F>>,
     config_service: Arc<ForgeConfigService<F>>,
     auth_service: Arc<AuthService<F>>,
-    provider_service: Arc<ForgeProviderRegistry<F, ProfileService<F>>>,
+    provider_service: Arc<ForgeProviderRegistry<F>>,
     agent_loader_service: Arc<ForgeAgentLoaderService<F>>,
     policy_service: ForgePolicyService<F>,
     profile_service: Arc<ProfileService<F>>,
@@ -108,10 +108,7 @@ impl<
         let agent_loader_service = Arc::new(ForgeAgentLoaderService::new(infra.clone()));
         let policy_service = ForgePolicyService::new(infra.clone());
         let profile_service = Arc::new(ForgeProfileService::new(infra.clone()));
-        let provider_service = Arc::new(ForgeProviderRegistry::new(
-            infra.clone(),
-            profile_service.clone(),
-        ));
+        let provider_service = Arc::new(ForgeProviderRegistry::new(infra.clone()));
 
         Self {
             conversation_service,
@@ -183,7 +180,7 @@ impl<
     type McpService = McpService<F>;
     type AppConfigService = ForgeConfigService<F>;
     type AuthService = AuthService<F>;
-    type ProviderRegistry = ForgeProviderRegistry<F, ProfileService<F>>;
+    type ProviderRegistry = ForgeProviderRegistry<F>;
     type AgentLoaderService = ForgeAgentLoaderService<F>;
     type PolicyService = ForgePolicyService<F>;
     type ProfileService = ProfileService<F>;

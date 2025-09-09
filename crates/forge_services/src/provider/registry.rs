@@ -1,25 +1,25 @@
 use std::sync::Arc;
 
 use anyhow::Context;
+use forge_app::ProviderRegistry;
 use forge_app::domain::{Provider, ProviderUrl};
-use forge_app::{ProfileService, ProviderRegistry};
+use forge_app::dto::Profile;
 use tokio::sync::RwLock;
 
 use crate::EnvironmentInfra;
 
 type ProviderSearch = (&'static str, Box<dyn FnOnce(&str) -> Provider>);
 
-pub struct ForgeProviderRegistry<F, P> {
+pub struct ForgeProviderRegistry<F> {
     infra: Arc<F>,
-    profile_service: Arc<P>,
     // IMPORTANT: This cache is used to avoid logging out if the user has logged out from other
     // session. This helps to keep the user logged in for current session.
     cache: Arc<RwLock<Option<Provider>>>,
 }
 
-impl<F: EnvironmentInfra, P: ProfileService> ForgeProviderRegistry<F, P> {
-    pub fn new(infra: Arc<F>, profile_service: Arc<P>) -> Self {
-        Self { infra, profile_service, cache: Arc::new(Default::default()) }
+impl<F: EnvironmentInfra> ForgeProviderRegistry<F> {
+    pub fn new(infra: Arc<F>) -> Self {
+        Self { infra, cache: Arc::new(Default::default()) }
     }
 
     fn provider_url(&self) -> Option<ProviderUrl> {
@@ -33,43 +33,25 @@ impl<F: EnvironmentInfra, P: ProfileService> ForgeProviderRegistry<F, P> {
         None
     }
 
-    async fn resolve_provider(&self) -> Option<Provider> {
-        // First, try to find the explicitly active provider
-        if let Some(profile) = self
-            .profile_service
-            .get_active_profile()
-            .await
-            .ok()
-            .flatten()
-        {
-            return Some(profile.provider);
+    fn resolve_provider(&self, profile: &Profile) -> Option<Provider> {
+        // Use the provided profile's provider if it's valid
+        if profile.provider.key().is_some() {
+            return Some(profile.provider.clone());
         }
-        // If no active provider, try to find the first one that can be configured
-        // otherwise fallback to env provider
-        let profiles = self
-            .profile_service
-            .list_profiles()
-            .await
-            .ok()
-            .unwrap_or(vec![]);
 
-        profiles
-            .into_iter()
-            .find_map(|p| p.provider.key().map(|_| p.provider.clone()))
-            .or_else(|| resolve_env_provider(self.provider_url(), self.infra.as_ref()))
+        // Fallback to environment variables
+        resolve_env_provider(self.provider_url(), self.infra.as_ref())
     }
 }
 
 #[async_trait::async_trait]
-impl<F: EnvironmentInfra, P: ProfileService + Send + Sync> ProviderRegistry
-    for ForgeProviderRegistry<F, P>
-{
-    async fn get_provider(&self) -> anyhow::Result<Provider> {
+impl<F: EnvironmentInfra> ProviderRegistry for ForgeProviderRegistry<F> {
+    async fn get_provider(&self, profile: &Profile) -> anyhow::Result<Provider> {
         if let Some(provider) = self.cache.read().await.as_ref() {
             return Ok(provider.clone());
         }
 
-        let provider = self.resolve_provider().await.context("No valid provider configuration found. Please configure a profile in your `profiles.yaml` file or set one of the following environment variables: OPENROUTER_API_KEY, REQUESTY_API_KEY, XAI_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY.")?;
+        let provider = self.resolve_provider(profile).context("No valid provider configuration found. Please configure a profile in your `profiles.yaml` file or set one of the following environment variables: OPENROUTER_API_KEY, REQUESTY_API_KEY, XAI_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY.")?;
         self.cache.write().await.replace(provider.clone());
         Ok(provider)
     }

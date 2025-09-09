@@ -7,13 +7,13 @@ use forge_domain::*;
 use forge_stream::MpscStream;
 
 use crate::authenticator::Authenticator;
-use crate::dto::{InitAuth, ToolsOverview};
+use crate::dto::{InitAuth, Profile, ToolsOverview};
 use crate::orch::Orchestrator;
 use crate::services::{CustomInstructionsService, TemplateService};
 use crate::tool_registry::ToolRegistry;
 use crate::{
     AttachmentService, ConversationService, EnvironmentService, FileDiscoveryService,
-    ProviderRegistry, ProviderService, Services, Walker, WorkflowService,
+    ProfileService, ProviderRegistry, ProviderService, Services, Walker, WorkflowService,
 };
 
 /// ForgeApp handles the core chat functionality by orchestrating various
@@ -52,8 +52,12 @@ impl<S: Services> ForgeApp<S> {
 
         // Get tool definitions and models
         let tool_definitions = self.tool_registry.list().await?;
+        let profile = services
+            .get_active_profile()
+            .await?
+            .unwrap_or_else(|| Profile::new("default"));
         let provider = services
-            .get_provider()
+            .get_provider(&profile)
             .await
             .context("Failed to get provider")?;
         let models = services.models(provider).await?;

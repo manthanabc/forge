@@ -342,7 +342,7 @@ pub trait ProfileService: Send + Sync {
 
 #[async_trait::async_trait]
 pub trait ProviderRegistry: Send + Sync {
-    async fn get_provider(&self) -> anyhow::Result<Provider>;
+    async fn get_provider(&self, profile: &Profile) -> anyhow::Result<Provider>;
     async fn clear_provider_cache(&self);
 }
 
@@ -686,8 +686,8 @@ impl<I: Services> CustomInstructionsService for I {
 
 #[async_trait::async_trait]
 impl<I: Services> ProviderRegistry for I {
-    async fn get_provider(&self) -> anyhow::Result<Provider> {
-        self.provider_registry().get_provider().await
+    async fn get_provider(&self, profile: &Profile) -> anyhow::Result<Provider> {
+        self.provider_registry().get_provider(profile).await
     }
     async fn clear_provider_cache(&self) {
         self.provider_registry().clear_provider_cache().await
