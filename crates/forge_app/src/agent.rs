@@ -5,7 +5,6 @@ use forge_domain::{
     ToolCallFull, ToolResult,
 };
 
-use crate::dto::Profile;
 use crate::tool_registry::ToolRegistry;
 use crate::{
     ConversationService, ProfileService, ProviderRegistry, ProviderService, Services,
