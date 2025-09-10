@@ -161,13 +161,7 @@ impl SpinnerManager {
     }
 
     pub fn write(&mut self, message: impl ToString) -> Result<()> {
-        let is_running = self.spinner.is_some();
-        let prev_message = self.message.clone();
         self.stop_internal(Some(message.to_string()), false)?;
-        if is_running {
-            self.message = prev_message;
-        }
-
         Ok(())
     }
 }
