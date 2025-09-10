@@ -54,7 +54,7 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
                 && let Some(ref sender) = sender
                 && !reasoning.is_empty()
             {
-                messages_sent = reasoning.as_str().len() > 0 || messages_sent;
+                messages_sent = !reasoning.as_str().is_empty() || messages_sent;
                 let _ = sender
                     .send(Ok(ChatResponse::TaskReasoning {
                         content: crate::ChatResponseContent::Streaming(
