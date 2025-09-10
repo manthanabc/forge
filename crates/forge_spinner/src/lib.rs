@@ -20,9 +20,13 @@ impl SpinnerManager {
         Self::default()
     }
 
-    /// Start the spinner with a message
     pub fn start(&mut self, message: Option<&str>) -> Result<()> {
-        self.stop(None)?;
+        self.start_internal(message, true)
+    }
+
+    /// Start the spinner with a message
+    pub fn start_internal(&mut self, message: Option<&str>, new_line: bool) -> Result<()> {
+        self.stop_internal(None, new_line)?;
 
         let words = [
             "Thinking",
@@ -109,17 +113,30 @@ impl SpinnerManager {
 
     /// Stop the active spinner if any
     pub fn stop(&mut self, message: Option<String>) -> Result<()> {
+        self.stop_internal(message, true)
+    }
+
+    /// Stop the active spinner if any
+    pub fn stop_internal(&mut self, message: Option<String>, new_line: bool) -> Result<()> {
         if let Some(spinner) = self.spinner.take() {
             // Always finish the spinner first
             spinner.finish_and_clear();
 
             // Then print the message if provided
             if let Some(msg) = message {
-                println!("{msg}");
+                if new_line {
+                    println!("{msg}");
+                } else {
+                    print!("{msg}");
+                }
             }
         } else if let Some(message) = message {
             // If there's no spinner but we have a message, just print it
-            println!("{message}");
+            if new_line {
+                println!("{message}");
+            } else {
+                print!("{message}");
+            }
         }
 
         // Tracker task will be dropped here.
@@ -138,6 +155,17 @@ impl SpinnerManager {
         self.stop(Some(message.to_string()))?;
         if is_running {
             self.start(prev_message.as_deref())?
+        }
+
+        Ok(())
+    }
+
+    pub fn write(&mut self, message: impl ToString) -> Result<()> {
+        let is_running = self.spinner.is_some();
+        let prev_message = self.message.clone();
+        self.stop_internal(Some(message.to_string()), false)?;
+        if is_running {
+            self.message = prev_message;
         }
 
         Ok(())

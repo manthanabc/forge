@@ -450,19 +450,19 @@ impl<S: AgentService> Orchestrator<S> {
                 .iter()
                 .any(|call| Tools::should_yield(&call.name));
 
-            // if !is_complete && has_tool_calls {
-            //     // If task is completed we would have already displayed a message so we
-            // can     // ignore the content that's collected from the stream
-            //     // NOTE: Important to send the content messages before the tool call
-            // happens     self.send(ChatResponse::TaskMessage {
-            //         content: ChatResponseContent::Markdown(
-            //             remove_tag_with_prefix(&content, "forge_")
-            //                 .as_str()
-            //                 .to_string(),
-            //         ),
-            //     })
-            //     .await?;
-            // }
+            if !is_complete && has_tool_calls {
+                // If task is completed we would have already displayed a message so we can
+                // ignore the content that's collected from the stream
+                // NOTE: Important to send the content messages before the tool call happens
+                self.send(ChatResponse::TaskMessage {
+                    content: ChatResponseContent::Markdown(
+                        remove_tag_with_prefix(&content, "forge_")
+                            .as_str()
+                            .to_string(),
+                    ),
+                })
+                .await?;
+            }
 
             // Check if tool calls are within allowed limits if max_tool_failure_per_turn is
             // configured

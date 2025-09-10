@@ -777,7 +777,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             ChatResponse::TaskMessage { content } => match content {
                 ChatResponseContent::Title(title) => self.writeln(title.display())?,
                 ChatResponseContent::PlainText(text) => self.writeln(text)?,
-                ChatResponseContent::Streaming(text) => print!("{text}"),
+                ChatResponseContent::Streaming(text) => self.spinner.write(text)?,
                 ChatResponseContent::Markdown(text) => {
                     tracing::info!(message = %text, "Agent Response");
                     self.writeln(self.markdown.render(&text))?;
@@ -832,7 +832,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             ChatResponse::TaskReasoning { content } => {
                 match content {
                     ChatResponseContent::Streaming(text) => {
-                        print!("{}", text.dimmed());
+                        self.spinner.write(text.dimmed().to_string())?;
                     }
                     ChatResponseContent::PlainText(text) => {
                         self.writeln(text)?;
