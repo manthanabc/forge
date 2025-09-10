@@ -777,6 +777,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             ChatResponse::TaskMessage { content } => match content {
                 ChatResponseContent::Title(title) => self.writeln(title.display())?,
                 ChatResponseContent::PlainText(text) => self.writeln(text)?,
+                ChatResponseContent::Streaming(text) => print!("{text}"),
                 ChatResponseContent::Markdown(text) => {
                     tracing::info!(message = %text, "Agent Response");
                     self.writeln(self.markdown.render(&text))?;
@@ -829,10 +830,15 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 self.should_continue().await?;
             }
             ChatResponse::TaskReasoning { content } => {
-                if !content.trim().is_empty() {
-                    let rendered_content = self.markdown.render(&content);
-                    self.writeln(rendered_content.dimmed())?;
-                }
+                match content {
+                    ChatResponseContent::Streaming(text) => {
+                        print!("{}", text.dimmed().to_string());
+                    }
+                    ChatResponseContent::PlainText(text) => {
+                        self.writeln(text)?;
+                    }
+                    _ => {}
+                };
             }
             ChatResponse::TaskComplete => {
                 if let Some(conversation_id) = self.state.conversation_id.as_ref() {

@@ -76,6 +76,11 @@ impl<S: Services> AgentExecutor<S> {
                     ChatResponseContent::Title(_) => ctx.send(message).await?,
                     ChatResponseContent::PlainText(text) => output = Some(text.to_owned()),
                     ChatResponseContent::Markdown(text) => output = Some(text.to_owned()),
+                    ChatResponseContent::Streaming(text) => {
+                        if let Some(output) = output.as_mut() {
+                            output.push_str(&text);
+                        }
+                    }
                 },
                 ChatResponse::TaskReasoning { .. } => {}
                 ChatResponse::TaskComplete => {}

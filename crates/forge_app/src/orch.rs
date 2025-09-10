@@ -253,7 +253,7 @@ impl<S: AgentService> Orchestrator<S> {
             .services
             .chat_agent(model_id, transformers.transform(context))
             .await?;
-        response.into_full(!tool_supported).await
+        response.into_full(!tool_supported, self.sender.clone()).await
     }
     /// Checks if compaction is needed and performs it if necessary
     async fn check_and_compact(
@@ -403,7 +403,6 @@ impl<S: AgentService> Orchestrator<S> {
                     tool_calls,
                     content,
                     usage,
-                    reasoning,
                     reasoning_details,
                     finish_reason,
                 },
@@ -449,28 +448,19 @@ impl<S: AgentService> Orchestrator<S> {
                 .iter()
                 .any(|call| Tools::should_yield(&call.name));
 
-            if !is_complete && has_tool_calls {
-                // If task is completed we would have already displayed a message so we can
-                // ignore the content that's collected from the stream
-                // NOTE: Important to send the content messages before the tool call happens
-                self.send(ChatResponse::TaskMessage {
-                    content: ChatResponseContent::Markdown(
-                        remove_tag_with_prefix(&content, "forge_")
-                            .as_str()
-                            .to_string(),
-                    ),
-                })
-                .await?;
-            }
-
-            if let Some(reasoning) = reasoning.as_ref()
-                && !is_complete
-                && context.is_reasoning_supported()
-            {
-                // If reasoning is present, send it as a separate message
-                self.send(ChatResponse::TaskReasoning { content: reasoning.to_string() })
-                    .await?;
-            }
+            // if !is_complete && has_tool_calls {
+            //     // If task is completed we would have already displayed a message so we can
+            //     // ignore the content that's collected from the stream
+            //     // NOTE: Important to send the content messages before the tool call happens
+            //     self.send(ChatResponse::TaskMessage {
+            //         content: ChatResponseContent::Markdown(
+            //             remove_tag_with_prefix(&content, "forge_")
+            //                 .as_str()
+            //                 .to_string(),
+            //         ),
+            //     })
+            //     .await?;
+            // }
 
             // Check if tool calls are within allowed limits if max_tool_failure_per_turn is
             // configured
@@ -511,15 +501,6 @@ impl<S: AgentService> Orchestrator<S> {
             if !(turn_has_tool_calls || has_tool_calls) {
                 // No tools were called in the previous turn nor were they called in this step;
                 // Means that this is conversation.
-
-                self.send(ChatResponse::TaskMessage {
-                    content: ChatResponseContent::Markdown(
-                        remove_tag_with_prefix(&content, "forge_")
-                            .as_str()
-                            .to_string(),
-                    ),
-                })
-                .await?;
                 is_complete = true
             } else if turn_has_tool_calls && !has_tool_calls {
                 // Since no tool calls are present, which doesn't mean task is complete so

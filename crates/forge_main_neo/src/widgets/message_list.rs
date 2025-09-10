@@ -1,5 +1,4 @@
 use ansi_to_tui::IntoText;
-use color_eyre::owo_colors::OwoColorize;
 use forge_api::{ChatResponse, ChatResponseContent};
 use ratatui::layout::Size;
 use ratatui::prelude::Widget;
@@ -32,7 +31,9 @@ fn messages_to_lines(messages: &[Message]) -> Vec<Line<'_>> {
                             Err(_) => vec![Line::raw(rendered_text)].into_iter(),
                         }
                     }
-                    ChatResponseContent::Title(_) | ChatResponseContent::PlainText(_) => {
+                    ChatResponseContent::Streaming(_)
+                    | ChatResponseContent::Title(_)
+                    | ChatResponseContent::PlainText(_) => {
                         // match text.clone() {
                         //     Ok(text) => text.lines.into_iter(),
                         //     Err(_) => vec![Line::raw(text.clone())].into_iter(),
@@ -47,16 +48,17 @@ fn messages_to_lines(messages: &[Message]) -> Vec<Line<'_>> {
                 ChatResponse::Interrupt { reason: _ } => {
                     todo!()
                 }
-                ChatResponse::TaskReasoning { content } => {
-                    if !content.trim().is_empty() {
-                        let dimmed_content = content.dimmed().to_string();
-                        match dimmed_content.into_text() {
-                            Ok(text) => text.lines.into_iter(),
-                            Err(_) => vec![Line::raw(dimmed_content)].into_iter(),
-                        }
-                    } else {
-                        vec![].into_iter()
-                    }
+                ChatResponse::TaskReasoning { content: _ } => {
+                    // if !content.trim().is_empty() {
+                    //     let dimmed_content = content.dimmed().to_string();
+                    //     match dimmed_content.into_text() {
+                    //         Ok(text) => text.lines.into_iter(),
+                    //         Err(_) => vec![Line::raw(dimmed_content)].into_iter(),
+                    //     }
+                    // } else {
+                    //     vec![].into_iter()
+                    // }
+                    todo!()
                 }
 
                 ChatResponse::RetryAttempt { cause: _, duration: _ } => {
