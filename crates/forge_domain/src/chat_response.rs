@@ -34,7 +34,9 @@ impl ChatResponseContent {
 
     pub fn as_str(&self) -> &str {
         match self {
-            ChatResponseContent::Streaming(text) | ChatResponseContent::PlainText(text) | ChatResponseContent::Markdown(text) => text,
+            ChatResponseContent::Streaming(text)
+            | ChatResponseContent::PlainText(text)
+            | ChatResponseContent::Markdown(text) => text,
             ChatResponseContent::Title(_) => "",
         }
     }

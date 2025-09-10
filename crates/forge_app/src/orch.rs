@@ -253,7 +253,9 @@ impl<S: AgentService> Orchestrator<S> {
             .services
             .chat_agent(model_id, transformers.transform(context))
             .await?;
-        response.into_full(!tool_supported, self.sender.clone()).await
+        response
+            .into_full(!tool_supported, self.sender.clone())
+            .await
     }
     /// Checks if compaction is needed and performs it if necessary
     async fn check_and_compact(
@@ -449,10 +451,10 @@ impl<S: AgentService> Orchestrator<S> {
                 .any(|call| Tools::should_yield(&call.name));
 
             // if !is_complete && has_tool_calls {
-            //     // If task is completed we would have already displayed a message so we can
-            //     // ignore the content that's collected from the stream
-            //     // NOTE: Important to send the content messages before the tool call happens
-            //     self.send(ChatResponse::TaskMessage {
+            //     // If task is completed we would have already displayed a message so we
+            // can     // ignore the content that's collected from the stream
+            //     // NOTE: Important to send the content messages before the tool call
+            // happens     self.send(ChatResponse::TaskMessage {
             //         content: ChatResponseContent::Markdown(
             //             remove_tag_with_prefix(&content, "forge_")
             //                 .as_str()

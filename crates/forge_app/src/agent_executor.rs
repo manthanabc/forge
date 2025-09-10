@@ -78,7 +78,7 @@ impl<S: Services> AgentExecutor<S> {
                     ChatResponseContent::Markdown(text) => output = Some(text.to_owned()),
                     ChatResponseContent::Streaming(text) => {
                         if let Some(output) = output.as_mut() {
-                            output.push_str(&text);
+                            output.push_str(text);
                         }
                     }
                 },

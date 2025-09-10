@@ -832,7 +832,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             ChatResponse::TaskReasoning { content } => {
                 match content {
                     ChatResponseContent::Streaming(text) => {
-                        print!("{}", text.dimmed().to_string());
+                        print!("{}", text.dimmed());
                     }
                     ChatResponseContent::PlainText(text) => {
                         self.writeln(text)?;
