@@ -116,7 +116,7 @@ impl SpinnerManager {
         self.stop_internal(message, true)
     }
 
-    /// Stop the active spinner if any
+    /// Stop the active spinner if any and prints the provided content.
     fn stop_internal(&mut self, message: Option<String>, new_line: bool) -> Result<()> {
         if let Some(spinner) = self.spinner.take() {
             // Always finish the spinner first
@@ -161,7 +161,12 @@ impl SpinnerManager {
     }
 
     pub fn write(&mut self, message: impl ToString) -> Result<()> {
+        let is_running = self.spinner.is_some();
+        let prev_message = self.message.clone();
         self.stop_internal(Some(message.to_string()), false)?;
+        if is_running {
+            self.message = prev_message;
+        }
         Ok(())
     }
 }
