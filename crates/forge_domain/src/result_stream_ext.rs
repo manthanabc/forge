@@ -52,16 +52,17 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
 
             if let Some(reasoning) = message.reasoning.as_ref()
                 && let Some(ref sender) = sender
-                    && !reasoning.is_empty() {
-                        messages_sent = true;
-                        let _ = sender
-                            .send(Ok(ChatResponse::TaskReasoning {
-                                content: crate::ChatResponseContent::Streaming(
-                                    reasoning.as_str().to_string(),
-                                ),
-                            }))
-                            .await;
-                    }
+                && !reasoning.is_empty()
+            {
+                messages_sent = true;
+                let _ = sender
+                    .send(Ok(ChatResponse::TaskReasoning {
+                        content: crate::ChatResponseContent::Streaming(
+                            reasoning.as_str().to_string(),
+                        ),
+                    }))
+                    .await;
+            }
 
             if !tool_interrupted {
                 messages.push(message.clone());
@@ -70,16 +71,17 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
                 if let Some(content_part) = message.content.as_ref() {
                     // Stream content to UI immediately if sender is provided
                     if let Some(ref sender) = sender
-                        && !content_part.is_empty() {
-                            messages_sent = true;
-                            let _ = sender
-                                .send(Ok(ChatResponse::TaskMessage {
-                                    content: crate::ChatResponseContent::Streaming(
-                                        content_part.as_str().to_string(),
-                                    ),
-                                }))
-                                .await;
-                        }
+                        && !content_part.is_empty()
+                    {
+                        messages_sent = true;
+                        let _ = sender
+                            .send(Ok(ChatResponse::TaskMessage {
+                                content: crate::ChatResponseContent::Streaming(
+                                    content_part.as_str().to_string(),
+                                ),
+                            }))
+                            .await;
+                    }
 
                     content.push_str(content_part.as_str());
 
