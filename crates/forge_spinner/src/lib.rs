@@ -25,7 +25,7 @@ impl SpinnerManager {
     }
 
     /// Start the spinner with a message
-    pub fn start_internal(&mut self, message: Option<&str>, new_line: bool) -> Result<()> {
+    fn start_internal(&mut self, message: Option<&str>, new_line: bool) -> Result<()> {
         self.stop_internal(None, new_line)?;
 
         let words = [
@@ -117,7 +117,7 @@ impl SpinnerManager {
     }
 
     /// Stop the active spinner if any
-    pub fn stop_internal(&mut self, message: Option<String>, new_line: bool) -> Result<()> {
+    fn stop_internal(&mut self, message: Option<String>, new_line: bool) -> Result<()> {
         if let Some(spinner) = self.spinner.take() {
             // Always finish the spinner first
             spinner.finish_and_clear();
