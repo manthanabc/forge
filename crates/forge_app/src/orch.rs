@@ -7,6 +7,7 @@ use async_recursion::async_recursion;
 use derive_setters::Setters;
 use forge_domain::*;
 use forge_template::Element;
+use futures::StreamExt;
 use tracing::{debug, info, warn};
 
 use crate::agent::AgentService;
@@ -227,6 +228,73 @@ impl<S: AgentService> Orchestrator<S> {
         })
     }
 
+    async fn stream_chat_turn(
+        &self,
+        model_id: &ModelId,
+        context: Context,
+        reasoning_supported: bool,
+    ) -> anyhow::Result<ChatCompletionMessageFull> {
+        let tool_supported = self.is_tool_supported()?;
+        let mut transformers = TransformToolCalls::new()
+            .when(|_| !tool_supported)
+            .pipe(ImageHandling::new())
+            .pipe(DropReasoningDetails.when(|_| !reasoning_supported))
+            .pipe(ReasoningNormalizer.when(|_| reasoning_supported));
+        let mut response = self
+            .services
+            .chat_agent(model_id, transformers.transform(context))
+            .await?;
+
+        let mut messages = Vec::new();
+        let mut usage: Usage = Default::default();
+        let mut content = String::new();
+
+        while let Some(message) = response.next().await {
+            let message = message?;
+            messages.push(message.clone());
+
+            // Process usage
+            if let Some(current_usage) = message.usage.as_ref() {
+                usage = current_usage.clone();
+            }
+
+            // Stream content
+            if let Some(content_part) = &message.content {
+                let content_str = content_part.as_str();
+                content.push_str(content_str);
+                self.send(ChatResponse::TaskMessage {
+                    content: ChatResponseContent::PlainText(content_str.to_string()),
+                })
+                .await?;
+            }
+        }
+
+        // Build the full message from collected messages
+        let reasoning = messages
+            .iter()
+            .flat_map(|m| m.reasoning.iter())
+            .map(|c| c.as_str())
+            .collect::<Vec<_>>()
+            .join("");
+
+        let tool_calls: Vec<ToolCallFull> = messages
+            .iter()
+            .flat_map(|m| &m.tool_calls)
+            .filter_map(|tc| tc.as_full().cloned())
+            .collect();
+
+        let finish_reason = messages.iter().rev().find_map(|m| m.finish_reason.clone());
+
+        Ok(ChatCompletionMessageFull {
+            content,
+            tool_calls,
+            usage,
+            reasoning: (!reasoning.is_empty()).then_some(reasoning),
+            reasoning_details: None, // Simplified
+            finish_reason,
+        })
+    }
+
     async fn execute_chat_turn(
         &self,
         model_id: &ModelId,
@@ -375,7 +443,7 @@ impl<S: AgentService> Orchestrator<S> {
             // Run the main chat request and compaction check in parallel
             let main_request = crate::retry::retry_with_config(
                 &self.environment.retry_config,
-                || self.execute_chat_turn(&model_id, context.clone(), context.is_reasoning_supported()),
+                || self.stream_chat_turn(&model_id, context.clone(), context.is_reasoning_supported()),
                 self.sender.as_ref().map(|sender| {
                     let sender = sender.clone();
                     let agent_id = agent.id.clone();
