@@ -40,7 +40,7 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
         let mut content = String::new();
         let mut xml_tool_calls = None;
         let mut tool_interrupted = false;
-        let mut reasoning_tokens_sent = false;
+        let mut sent_reasoning_tokens = false;
 
         while let Some(message) = self.next().await {
             let message =
@@ -54,7 +54,7 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
                 && let Some(ref sender) = sender
                 && !reasoning.is_empty()
             {
-                reasoning_tokens_sent = reasoning.as_str().len() > 0 || reasoning_tokens_sent;
+                sent_reasoning_tokens = reasoning.as_str().len() > 0 || sent_reasoning_tokens;
                 let _ = sender
                     .send(Ok(ChatResponse::TaskReasoning {
                         content: reasoning.as_str().to_string(),
@@ -88,7 +88,7 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
 
         // If reasoning tokens have been streamed, send a newline so that any subsequent
         // messages are properly formatted.
-        if reasoning_tokens_sent && let Some(ref sender) = sender {
+        if sent_reasoning_tokens && let Some(ref sender) = sender {
             let _ = sender
                 .send(Ok(ChatResponse::TaskMessage {
                     content: crate::ChatResponseContent::PlainText(String::default()),
