@@ -1,4 +1,5 @@
-use std::{io::Write, time::Instant};
+use std::io::Write;
+use std::time::Instant;
 
 use anyhow::Result;
 use colored::Colorize;
