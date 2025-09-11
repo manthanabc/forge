@@ -831,13 +831,10 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             }
             ChatResponse::TaskReasoning { content } => {
                 match content {
-                    ChatResponseContent::Streaming(text) => {
-                        self.spinner.write(text.dimmed().to_string())?;
-                    }
-                    ChatResponseContent::PlainText(text) => {
-                        self.writeln(text)?;
-                    }
-                    _ => {}
+                    ChatResponseContent::Streaming(text) => self.spinner.write(text.dimmed().into())?,
+                    ChatResponseContent::PlainText(text) => self.writeln(text)?,
+                    ChatResponseContent::Markdown(markdown) => self.writeln(self.markdown.render(&markdown))?,
+                    ChatResponseContent::Title(title) => self.writeln(title.display())?,
                 };
             }
             ChatResponse::TaskComplete => {
