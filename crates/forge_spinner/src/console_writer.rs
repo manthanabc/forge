@@ -63,7 +63,6 @@ mod tests {
         }
     }
 
-
     #[test]
     fn test_is_new_line_required_when_no_message() {
         let fixture = ConsoleWriter::vec();
