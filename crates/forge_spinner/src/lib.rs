@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::{io::Write, time::Instant};
 
 use anyhow::Result;
 use colored::Colorize;
@@ -129,6 +129,8 @@ impl SpinnerManager {
                 } else {
                     print!("{msg}");
                 }
+                // flush the msg on UI.
+                let _ = std::io::stdout().flush();
             }
         } else if let Some(message) = message {
             // If there's no spinner but we have a message, just print it
@@ -137,6 +139,8 @@ impl SpinnerManager {
             } else {
                 print!("{message}");
             }
+            // flush the msg on UI.
+            let _ = std::io::stdout().flush();
         }
 
         // Tracker task will be dropped here.
