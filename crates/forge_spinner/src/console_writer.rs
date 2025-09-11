@@ -10,11 +10,11 @@ impl ConsoleWriter {
     /// Writes text followed by a newline, ensuring proper formatting
     pub fn writeln(&mut self, message: impl AsRef<str>) -> io::Result<()> {
         if self.is_new_line_required() {
-            self.message = None;
             writeln!(io::stdout(), "")?;
         }
         writeln!(io::stdout(), "{}", message.as_ref())?;
         io::stdout().flush()?;
+        self.message = Some(format!("{}\n", message.as_ref()));
         Ok(())
     }
 
