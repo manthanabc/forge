@@ -65,7 +65,7 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
             if !tool_interrupted {
                 messages.push(message.clone());
 
-                // Process content and stream to UI
+                // Process content
                 if let Some(content_part) = message.content.as_ref() {
                     content.push_str(content_part.as_str());
 
