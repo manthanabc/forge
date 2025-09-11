@@ -450,16 +450,14 @@ impl<S: AgentService> Orchestrator<S> {
                 // If task is completed we would have already displayed a message so we can
                 // ignore the content that's collected from the stream
                 // NOTE: Important to send the content messages before the tool call happens
-                if !content.trim().is_empty() {
-                    self.send(ChatResponse::TaskMessage {
-                        content: ChatResponseContent::Markdown(
-                            remove_tag_with_prefix(&content, "forge_")
-                                .as_str()
-                                .to_string(),
-                        ),
-                    })
-                    .await?;
-                }
+                self.send(ChatResponse::TaskMessage {
+                    content: ChatResponseContent::Markdown(
+                        remove_tag_with_prefix(&content, "forge_")
+                            .as_str()
+                            .to_string(),
+                    ),
+                })
+                .await?;
             }
 
             // Check if tool calls are within allowed limits if max_tool_failure_per_turn is
@@ -498,6 +496,14 @@ impl<S: AgentService> Orchestrator<S> {
             if !(turn_has_tool_calls || has_tool_calls) {
                 // No tools were called in the previous turn nor were they called in this step;
                 // Means that this is conversation.
+                 self.send(ChatResponse::TaskMessage {
+                    content: ChatResponseContent::Markdown(
+                        remove_tag_with_prefix(&content, "forge_")
+                            .as_str()
+                            .to_string(),
+                    ),
+                })
+                .await?;
                 is_complete = true
             } else if turn_has_tool_calls && !has_tool_calls {
                 // Since no tool calls are present, which doesn't mean task is complete so
