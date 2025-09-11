@@ -22,12 +22,7 @@ impl SpinnerManager {
     }
 
     pub fn start(&mut self, message: Option<&str>) -> Result<()> {
-        self.start_internal(message, true)
-    }
-
-    /// Start the spinner with a message
-    fn start_internal(&mut self, message: Option<&str>, new_line: bool) -> Result<()> {
-        self.stop_internal(None, new_line)?;
+        self.stop_internal(None, true)?;
 
         let words = [
             "Thinking",
