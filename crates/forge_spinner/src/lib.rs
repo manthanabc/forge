@@ -1,4 +1,6 @@
-use std::io::Write;
+mod console_writer;
+
+use console_writer::ConsoleWriter;
 use std::time::Instant;
 
 use anyhow::Result;
@@ -14,6 +16,7 @@ pub struct SpinnerManager {
     start_time: Option<Instant>,
     message: Option<String>,
     tracker: Option<JoinHandle<()>>,
+    console_writer: ConsoleWriter,
 }
 
 impl SpinnerManager {
@@ -117,26 +120,15 @@ impl SpinnerManager {
         if let Some(spinner) = self.spinner.take() {
             // Always finish the spinner first
             spinner.finish_and_clear();
+        }
 
-            // Then print the message if provided
-            if let Some(msg) = message {
-                if new_line {
-                    println!("{msg}");
-                } else {
-                    print!("{msg}");
-                }
-                // flush the msg on UI.
-                let _ = std::io::stdout().flush();
-            }
-        } else if let Some(message) = message {
-            // If there's no spinner but we have a message, just print it
+        // Then print the message if provided
+        if let Some(msg) = message {
             if new_line {
-                println!("{message}");
+                self.console_writer.writeln(msg)?;
             } else {
-                print!("{message}");
+                self.console_writer.write(msg)?;
             }
-            // flush the msg on UI.
-            let _ = std::io::stdout().flush();
         }
 
         // Tracker task will be dropped here.
