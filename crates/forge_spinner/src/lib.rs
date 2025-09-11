@@ -165,6 +165,7 @@ impl SpinnerManager {
         Ok(())
     }
 
+    // Writes the console without new line.
     pub fn write(&mut self, message: impl ToString) -> Result<()> {
         let is_running = self.spinner.is_some();
         let prev_message = self.message.clone();
