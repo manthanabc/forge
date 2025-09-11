@@ -496,7 +496,7 @@ impl<S: AgentService> Orchestrator<S> {
             if !(turn_has_tool_calls || has_tool_calls) {
                 // No tools were called in the previous turn nor were they called in this step;
                 // Means that this is conversation.
-                 self.send(ChatResponse::TaskMessage {
+                self.send(ChatResponse::TaskMessage {
                     content: ChatResponseContent::Markdown(
                         remove_tag_with_prefix(&content, "forge_")
                             .as_str()
