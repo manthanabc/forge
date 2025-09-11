@@ -41,7 +41,7 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
         let mut xml_tool_calls = None;
         let mut tool_interrupted = false;
 
-        let mut messages_sent = false;
+        let mut reasoning_sent = false;
         while let Some(message) = self.next().await {
             let message =
                 anyhow::Ok(message?).with_context(|| "Failed to process message stream")?;
@@ -54,12 +54,10 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
                 && let Some(ref sender) = sender
                 && !reasoning.is_empty()
             {
-                messages_sent = !reasoning.as_str().is_empty() || messages_sent;
+                reasoning_sent = !reasoning.as_str().is_empty() || reasoning_sent;
                 let _ = sender
                     .send(Ok(ChatResponse::TaskReasoning {
-                        content: crate::ChatResponseContent::Streaming(
-                            reasoning.as_str().to_string(),
-                        ),
+                        content: reasoning.as_str().to_string(),
                     }))
                     .await;
             }
@@ -103,10 +101,10 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
         }
 
         // we need to add new line once we've sent all the messages.
-        if messages_sent && let Some(ref sender) = sender {
+        if reasoning_sent && let Some(ref sender) = sender {
             let _ = sender
                 .send(Ok(ChatResponse::TaskMessage {
-                    content: crate::ChatResponseContent::Streaming("\n".to_string()),
+                    content: crate::ChatResponseContent::PlainText("".to_string()),
                 }))
                 .await;
         }

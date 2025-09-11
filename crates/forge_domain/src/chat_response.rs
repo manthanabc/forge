@@ -7,7 +7,6 @@ pub enum ChatResponseContent {
     Title(TitleFormat),
     PlainText(String),
     Markdown(String),
-    Streaming(String),
 }
 
 impl From<ChatResponseContent> for ChatResponse {
@@ -34,8 +33,7 @@ impl ChatResponseContent {
 
     pub fn as_str(&self) -> &str {
         match self {
-            ChatResponseContent::Streaming(text)
-            | ChatResponseContent::PlainText(text)
+            ChatResponseContent::PlainText(text)
             | ChatResponseContent::Markdown(text) => text,
             ChatResponseContent::Title(_) => "",
         }
@@ -47,7 +45,7 @@ impl ChatResponseContent {
 #[derive(Debug, Clone)]
 pub enum ChatResponse {
     TaskMessage { content: ChatResponseContent },
-    TaskReasoning { content: ChatResponseContent },
+    TaskReasoning { content: String },
     TaskComplete,
     ToolCallStart(ToolCallFull),
     ToolCallEnd(ToolResult),
