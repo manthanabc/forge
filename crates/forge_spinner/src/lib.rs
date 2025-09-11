@@ -1,27 +1,39 @@
 mod console_writer;
 
-use console_writer::ConsoleWriter;
+use std::io;
 use std::time::Instant;
 
 use anyhow::Result;
 use colored::Colorize;
+use console_writer::ConsoleWriter;
 use indicatif::{ProgressBar, ProgressStyle};
 use rand::seq::IndexedRandom;
 use tokio::task::JoinHandle;
 
 /// Manages spinner functionality for the UI
-#[derive(Default)]
 pub struct SpinnerManager {
     spinner: Option<ProgressBar>,
     start_time: Option<Instant>,
     message: Option<String>,
     tracker: Option<JoinHandle<()>>,
-    console_writer: ConsoleWriter,
+    console_writer: ConsoleWriter<io::Stdout>,
+}
+
+impl Default for SpinnerManager {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SpinnerManager {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            spinner: None,
+            start_time: None,
+            message: None,
+            tracker: None,
+            console_writer: ConsoleWriter::stdout(),
+        }
     }
 
     pub fn start(&mut self, message: Option<&str>) -> Result<()> {
