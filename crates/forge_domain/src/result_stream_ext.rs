@@ -345,7 +345,6 @@ mod tests {
             content: "Hello world!".to_string(),
             tool_calls: vec![],
             usage: Usage::default(),
-            reasoning: Some("First reasoning: thinking deeply about this...".to_string()),
             reasoning_details: None,
             finish_reason: None,
         };
