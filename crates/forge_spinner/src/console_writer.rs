@@ -99,7 +99,7 @@ mod tests {
 
     #[test]
     fn test_write_outputs_correct_content() {
-        let mut fixture = ConsoleWriter::vec();;
+        let mut fixture = ConsoleWriter::vec();
         fixture.write("test message").unwrap();
         let actual = String::from_utf8(fixture.writer).unwrap();
         let expected = "test message".to_string();
