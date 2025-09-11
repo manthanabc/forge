@@ -100,7 +100,7 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
             }
         }
 
-        // we need to add new line once we've sent all the messages.
+        // we need to add new line once we've sent all the reasoning tokens.
         if reasoning_sent && let Some(ref sender) = sender {
             let _ = sender
                 .send(Ok(ChatResponse::TaskMessage {
