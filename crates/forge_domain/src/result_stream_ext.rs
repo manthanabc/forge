@@ -54,7 +54,7 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
                 && let Some(ref sender) = sender
                 && !reasoning.is_empty()
             {
-                sent_reasoning_tokens = reasoning.as_str().len() > 0 || sent_reasoning_tokens;
+                sent_reasoning_tokens = !reasoning.as_str().is_empty() || sent_reasoning_tokens;
                 let _ = sender
                     .send(Ok(ChatResponse::TaskReasoning {
                         content: reasoning.as_str().to_string(),
