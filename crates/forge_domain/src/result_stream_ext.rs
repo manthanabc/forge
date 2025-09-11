@@ -40,6 +40,7 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
         let mut content = String::new();
         let mut xml_tool_calls = None;
         let mut tool_interrupted = false;
+        let mut reasoning_tokens_sent = false;
 
         while let Some(message) = self.next().await {
             let message =
@@ -53,6 +54,7 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
                 && let Some(ref sender) = sender
                 && !reasoning.is_empty()
             {
+                reasoning_tokens_sent = reasoning.as_str().len() > 0 || reasoning_tokens_sent;
                 let _ = sender
                     .send(Ok(ChatResponse::TaskReasoning {
                         content: reasoning.as_str().to_string(),
@@ -65,20 +67,6 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
 
                 // Process content and stream to UI
                 if let Some(content_part) = message.content.as_ref() {
-                    // // Stream content to UI immediately if sender is provided
-                    // if let Some(ref sender) = sender {
-                    //     if !content_part.is_empty() {
-                    //         messages_sent = true;
-                    //         let _ = sender
-                    //             .send(Ok(ChatResponse::TaskMessage {
-                    //                 content: crate::ChatResponseContent::Streaming(
-                    //                     content_part.as_str().to_string(),
-                    //                 ),
-                    //             }))
-                    //             .await;
-                    //     }
-                    // }
-
                     content.push_str(content_part.as_str());
 
                     // Check for XML tool calls in the content, but only interrupt if flag is set
@@ -96,6 +84,16 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
                     }
                 }
             }
+        }
+
+        // If reasoning tokens have been streamed, send a newline so that any subsequent
+        // messages are properly formatted.
+        if reasoning_tokens_sent && let Some(ref sender) = sender {
+            let _ = sender
+                .send(Ok(ChatResponse::TaskMessage {
+                    content: crate::ChatResponseContent::PlainText(String::default()),
+                }))
+                .await;
         }
 
         // Get the full content from all messages
