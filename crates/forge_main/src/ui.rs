@@ -6,8 +6,9 @@ use anyhow::{Context, Result};
 use colored::Colorize;
 use convert_case::{Case, Casing};
 use forge_api::{
-    API, AgentId, AppConfig, ChatRequest, ChatResponse, Conversation, ConversationId, Event,
-    InterruptionReason, Model, ModelId, Profile, ToolName, Workflow,
+    API, AgentId, AppConfig, ChatRequest, ChatResponse, Conversation, ConversationId,
+    EVENT_USER_TASK_INIT, EVENT_USER_TASK_UPDATE, Event, InterruptionReason, Model, ModelId,
+    Profile, ToolName, Workflow,
 };
 use forge_display::MarkdownFormat;
 use forge_domain::{
@@ -30,10 +31,6 @@ use crate::state::UIState;
 use crate::title_display::TitleDisplayExt;
 use crate::update::on_update;
 use crate::{TRACKER, banner, tracker};
-
-// Event type constants moved to UI layer
-pub const EVENT_USER_TASK_INIT: &str = "user_task_init";
-pub const EVENT_USER_TASK_UPDATE: &str = "user_task_update";
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq, Default)]
 pub struct PartialEvent {
@@ -128,26 +125,27 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
     async fn on_profile_selection(&mut self) -> Result<()> {
         let profiles = self.api.list_profiles().await?;
 
-        let profile = match self.select_profile(profiles.clone()).await? {
-            Some(profile) => profile,
+        let profile_name = match self.select_profile(profiles.clone()).await? {
+            Some(name) => name,
             None => return Ok(()),
         };
 
+        let selected_profile = profiles
+            .into_iter()
+            .find(|p| p.name.as_ref() == profile_name)
+            .unwrap();
+
         // Set the active profile
-        self.api.set_active_profile(profile.clone()).await?;
-        self.writeln(format!("✓ Selected profile: {profile}"))?;
-        let new_workflow = self.api.read_merged(self.cli.workflow.as_deref()).await?;
+        self.api.set_active_profile(profile_name.clone()).await?;
+        self.writeln("✓ Selected profile: {profile_name}")?;
 
-        if let Some(ref model) = new_workflow.model {
-            self.update_model(model.clone());
-        }
-
-        let conversation_id = self.init_conversation().await?;
-
-        // Fetch the current conversation, update it with the new workflow, and save it.
-        if let Some(mut conversation) = self.api.conversation(&conversation_id).await? {
-            conversation.apply_workflow(new_workflow);
-            self.api.upsert_conversation(conversation).await?;
+        if let Some(model) = &selected_profile.model {
+            self.api
+                .update_workflow(self.cli.workflow.as_deref(), |workflow| {
+                    workflow.model = Some(model.clone());
+                })
+                .await?;
+            self.update_model(Some(model.clone()));
         }
 
         Ok(())
@@ -166,8 +164,8 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             .ok_or(anyhow::anyhow!("Undefined agent: {agent_id}"))?;
 
         let conversation_id = self.init_conversation().await?;
-        if let Some(mut conversation) = self.api.conversation(&conversation_id).await? {
-            conversation.set_variable("operating_agent".into(), Value::from(agent.id.as_str()));
+        if let Some(conversation) = self.api.conversation(&conversation_id).await? {
+            self.api.set_operating_agent(agent_id).await?;
             self.api.upsert_conversation(conversation).await?;
         }
 
@@ -301,6 +299,8 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
         tokio::spawn(async move { api.models().await });
         let api = self.api.clone();
         tokio::spawn(async move { api.tools().await });
+        let api = self.api.clone();
+        tokio::spawn(async move { api.get_agents().await });
     }
 
     async fn handle_subcommands(&mut self, subcommand: TopLevelCommand) -> anyhow::Result<()> {
@@ -628,21 +628,10 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             })
             .await?;
 
-        // Get the conversation to update
-        let conversation_id = self.init_conversation().await?;
+        // Update the UI state with the new model
+        self.update_model(Some(model.clone()));
 
-        if let Some(mut conversation) = self.api.conversation(&conversation_id).await? {
-            // Update the model in the conversation
-            conversation.set_model(&model);
-
-            // Upsert the updated conversation
-            self.api.upsert_conversation(conversation).await?;
-
-            // Update the UI state with the new model
-            self.update_model(model.clone());
-
-            self.writeln_title(TitleFormat::action(format!("Switched to model: {model}")))?;
-        }
+        self.writeln_title(TitleFormat::action(format!("Switched to model: {model}")))?;
 
         Ok(())
     }
@@ -669,6 +658,10 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
 
                 // Select a model if workflow doesn't have one
                 let workflow = self.init_state(false).await?;
+
+                // Update state
+                self.update_model(workflow.model.clone());
+
                 // We need to try and get the conversation ID first before fetching the model
                 let id = if let Some(ref path) = self.cli.conversation {
                     let conversation: Conversation =
@@ -677,13 +670,13 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
 
                     let conversation_id = conversation.id;
                     self.state.conversation_id = Some(conversation_id);
-                    self.update_model(conversation.main_model()?);
+
                     self.api.upsert_conversation(conversation).await?;
                     conversation_id
                 } else {
-                    let conversation = self.api.init_conversation(workflow).await?;
+                    let conversation = self.api.init_conversation().await?;
                     self.state.conversation_id = Some(conversation.id);
-                    self.update_model(conversation.main_model()?);
+
                     conversation.id
                 };
 
@@ -698,11 +691,10 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
         let mut workflow = self.api.read_workflow(self.cli.workflow.as_deref()).await?;
 
         let mut base_workflow = Workflow::default();
-        base_workflow.merge(workflow.clone());
-
         if let Ok(Some(profile)) = self.api.get_active_profile().await {
             base_workflow.merge(profile.to_workflow()?);
         }
+        base_workflow.merge(workflow.clone());
 
         if base_workflow.model.is_none() {
             workflow.model = Some(
@@ -966,9 +958,11 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
         Ok(())
     }
 
-    fn update_model(&mut self, model: ModelId) {
-        tracker::set_model(model.to_string());
-        self.state.model = Some(model);
+    fn update_model(&mut self, model: Option<ModelId>) {
+        if let Some(ref model) = model {
+            tracker::set_model(model.to_string());
+        }
+        self.state.model = model;
     }
 
     async fn on_custom_event(&mut self, event: Event) -> Result<()> {

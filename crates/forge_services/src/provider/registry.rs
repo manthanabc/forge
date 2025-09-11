@@ -27,6 +27,7 @@ impl<F: EnvironmentInfra> ForgeProviderRegistry<F> {
             return Some(ProviderUrl::OpenAI(url));
         }
 
+        // Check for Anthropic URL override
         if let Some(url) = self.infra.get_env_var("ANTHROPIC_URL") {
             return Some(ProviderUrl::Anthropic(url));
         }

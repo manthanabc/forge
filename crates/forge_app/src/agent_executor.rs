@@ -7,12 +7,10 @@ use forge_domain::{
 };
 use forge_template::Element;
 use futures::StreamExt;
-use merge::Merge;
 use tokio::sync::RwLock;
 
 use crate::error::Error;
-use crate::services::ProfileService;
-use crate::{AgentLoaderService, ConversationService, Services, WorkflowService};
+use crate::{AgentLoaderService, ConversationService, Services};
 
 #[derive(Clone)]
 pub struct AgentExecutor<S> {
@@ -54,14 +52,7 @@ impl<S: Services> AgentExecutor<S> {
         .await?;
 
         // Create a new conversation for agent execution
-        let mut workflow = self.services.read_merged(None).await?;
-        if let Some(profile) = self.services.get_active_profile().await? {
-            workflow.merge(profile.to_workflow()?);
-        }
-        let agents = self.services.get_agents().await?;
-        let conversation =
-            ConversationService::init_conversation(self.services.as_ref(), workflow, agents)
-                .await?;
+        let conversation = ConversationService::init_conversation(self.services.as_ref()).await?;
 
         // Execute the request through the ForgeApp
         let app = crate::ForgeApp::new(self.services.clone());

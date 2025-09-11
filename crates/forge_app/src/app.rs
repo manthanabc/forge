@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -5,6 +6,7 @@ use anyhow::{Context, Result};
 use chrono::Local;
 use forge_domain::*;
 use forge_stream::MpscStream;
+use merge::Merge;
 
 use crate::authenticator::Authenticator;
 use crate::dto::{InitAuth, Profile, ToolsOverview};
@@ -12,8 +14,9 @@ use crate::orch::Orchestrator;
 use crate::services::{CustomInstructionsService, TemplateService};
 use crate::tool_registry::ToolRegistry;
 use crate::{
-    AttachmentService, ConversationService, EnvironmentService, FileDiscoveryService,
-    ProfileService, ProviderRegistry, ProviderService, Services, Walker, WorkflowService,
+    AgentLoaderService, AttachmentService, ConversationService, EnvironmentService,
+    FileDiscoveryService, McpService, ProfileService, ProviderRegistry, ProviderService, Services,
+    Walker, WorkflowService,
 };
 
 /// ForgeApp handles the core chat functionality by orchestrating various
@@ -50,8 +53,6 @@ impl<S: Services> ForgeApp<S> {
             .unwrap_or_default()
             .expect("conversation for the request should've been created at this point.");
 
-        // Get tool definitions and models
-        let tool_definitions = self.tool_registry.list().await?;
         let profile = services
             .get_active_profile()
             .await?
@@ -63,7 +64,11 @@ impl<S: Services> ForgeApp<S> {
         let models = services.models(provider).await?;
 
         // Discover files using the discovery service
-        let workflow = self.services.read_merged(None).await.unwrap_or_default();
+        // workflow.merge(profile.to_workflow()?);
+        let mut workflow = Workflow::default();
+        workflow.merge(profile.to_workflow()?);
+        workflow.merge(self.services.read_merged(None).await.unwrap_or_default());
+
         let max_depth = workflow.max_walker_depth;
         let environment = services.get_environment();
 
@@ -83,6 +88,7 @@ impl<S: Services> ForgeApp<S> {
         // Register templates using workflow path or environment fallback
         let template_path = workflow
             .templates
+            .as_ref()
             .map_or(environment.templates(), |templates| {
                 PathBuf::from(templates)
             });
@@ -97,14 +103,46 @@ impl<S: Services> ForgeApp<S> {
 
         let custom_instructions = services.get_custom_instructions().await;
 
+        // Prepare agents with user configuration and subscriptions
+        let agents = services.get_agents().await?;
+
+        let mcp_tools = self.services.mcp_service().list().await?;
+        let agent = agents
+            .into_iter()
+            .map(|agent| {
+                agent
+                    .apply_workflow_config(&workflow)
+                    .extend_mcp_tools(&mcp_tools)
+            })
+            .find(|agent| agent.has_subscription(&chat.event.name))
+            .ok_or(crate::Error::UnsubscribedEvent(chat.event.name.to_owned()))?;
+
+        // Get system and mcp tool definitions
+        let tool_definitions = self.tool_registry.list().await?;
+        let uniq_tool_definitions = tool_definitions
+            .iter()
+            .map(|tool| (&tool.name, tool))
+            .collect::<HashMap<_, _>>();
+
+        let tool_definitions = agent
+            .tools
+            .iter()
+            .flatten()
+            .flat_map(|tool| uniq_tool_definitions.get(tool))
+            .cloned()
+            .cloned()
+            .collect::<Vec<_>>();
+
         // Create the orchestrator with all necessary dependencies
         let orch = Orchestrator::new(
             services.clone(),
             environment.clone(),
             conversation,
             Local::now(),
-            custom_instructions,
+            agent,
+            chat.event,
         )
+        .custom_instructions(custom_instructions)
         .tool_definitions(tool_definitions)
         .models(models)
         .files(files);
@@ -115,7 +153,7 @@ impl<S: Services> ForgeApp<S> {
                 async move {
                     // Execute dispatch and always save conversation afterwards
                     let mut orch = orch.sender(tx.clone());
-                    let dispatch_result = orch.chat(chat.event).await;
+                    let dispatch_result = orch.run().await;
 
                     // Always save conversation using get_conversation()
                     let conversation = orch.get_conversation().clone();
@@ -166,8 +204,10 @@ impl<S: Services> ForgeApp<S> {
 
         // Find the main agent (first agent in the conversation)
         // In most cases, there should be a primary agent for compaction
-        let agent = conversation
-            .agents
+        let agent = self
+            .services
+            .get_agents()
+            .await?
             .first()
             .ok_or_else(|| anyhow::anyhow!("No agents found in conversation"))?
             .clone();

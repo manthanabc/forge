@@ -32,7 +32,7 @@ impl std::fmt::Display for ProfileName {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Setters, Serialize, Deserialize)]
+#[derive(Debug, Clone, Setters, Serialize, Deserialize)]
 #[setters(strip_option, into)]
 pub struct Profile {
     /// Unique name identifier for this profile
@@ -172,7 +172,7 @@ impl Profile {
             max_tool_failure_per_turn: self.max_tool_failure_per_turn,
             max_requests_per_turn: self.max_requests_per_turn,
             compact: self.compact.clone(),
-            // Agents and commands are not part of a profile, so they are empty
+            // Commands are not part of a profile, so they are empty
             commands: Vec::new(),
         })
     }
