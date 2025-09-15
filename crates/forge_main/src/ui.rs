@@ -15,7 +15,7 @@ use forge_domain::{
     ChatResponseContent, McpConfig, McpServerConfig, Metrics, Provider, Scope, TitleFormat,
 };
 use forge_fs::ForgeFS;
-use forge_spinner::SpinnerManager;
+use forge_spinner::{ConsoleWriter, ForgeSpinner, SpinnerManager, StdoutWriter};
 use forge_tracker::ToolCallPayload;
 use merge::Merge;
 use serde::Deserialize;
@@ -58,7 +58,7 @@ pub struct UI<A, F: Fn() -> A> {
     console: Console,
     command: Arc<ForgeCommandManager>,
     cli: Cli,
-    spinner: SpinnerManager,
+    spinner: SpinnerManager<ConsoleWriter<StdoutWriter>, ForgeSpinner>,
     #[allow(dead_code)] // The guard is kept alive by being held in the struct
     _guard: forge_tracker::Guard,
 }
@@ -154,7 +154,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             console: Console::new(env.clone(), command.clone()),
             cli,
             command,
-            spinner: SpinnerManager::new(),
+            spinner: SpinnerManager::new(ConsoleWriter::default(), ForgeSpinner::new()),
             markdown: MarkdownFormat::new(),
             _guard: forge_tracker::init_tracing(env.log_path(), TRACKER.clone())?,
         })
