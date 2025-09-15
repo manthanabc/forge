@@ -27,18 +27,18 @@ impl Writer for StdoutWriter {
 }
 
 /// A console writer that handles proper formatting by tracking cursor position
-pub struct ConsoleWriter<W: Writer> {
+pub struct WriterWrapper<W: Writer> {
     message: Option<String>,
     writer: W,
 }
 
-impl Default for ConsoleWriter<StdoutWriter> {
+impl Default for WriterWrapper<StdoutWriter> {
     fn default() -> Self {
         Self { message: None, writer: StdoutWriter }
     }
 }
 
-impl<W: Writer> Writer for ConsoleWriter<W> {
+impl<W: Writer> Writer for WriterWrapper<W> {
     fn write(&mut self, s: &str) -> io::Result<()> {
         self.writer.write(s)?;
         self.message = Some(s.into());
@@ -55,7 +55,11 @@ impl<W: Writer> Writer for ConsoleWriter<W> {
     }
 }
 
-impl<W: Writer> ConsoleWriter<W> {
+impl<W: Writer> WriterWrapper<W> {
+    pub fn new(writer: W) -> Self {
+        Self { message: None, writer }
+    }
+
     /// Checks if new line is required or not.
     fn is_new_line_required(&self) -> bool {
         self.message
@@ -70,11 +74,7 @@ mod tests {
 
     use super::*;
 
-    impl<W: Writer> ConsoleWriter<W> {
-        pub fn new(writer: W) -> Self {
-            Self { message: None, writer }
-        }
-
+    impl<W: Writer> WriterWrapper<W> {
         pub fn message(&self) -> Option<&String> {
             self.message.as_ref()
         }
@@ -99,7 +99,7 @@ mod tests {
 
     #[test]
     fn test_is_new_line_required_when_no_message() {
-        let fixture = ConsoleWriter::new(MockWriter::default());
+        let fixture = WriterWrapper::new(MockWriter::default());
         let actual = fixture.is_new_line_required();
         let expected = false;
         assert_eq!(actual, expected);
@@ -107,7 +107,7 @@ mod tests {
 
     #[test]
     fn test_is_new_line_required_when_message_ends_with_newline() {
-        let mut fixture = ConsoleWriter::new(MockWriter::default());
+        let mut fixture = WriterWrapper::new(MockWriter::default());
         fixture.message = Some("hello\n".to_string());
         let actual = fixture.is_new_line_required();
         let expected = false;
@@ -116,7 +116,7 @@ mod tests {
 
     #[test]
     fn test_is_new_line_required_when_message_does_not_end_with_newline() {
-        let mut fixture = ConsoleWriter::new(MockWriter::default());
+        let mut fixture = WriterWrapper::new(MockWriter::default());
         fixture.message = Some("hello".to_string());
         let actual = fixture.is_new_line_required();
         let expected = true;
@@ -125,7 +125,7 @@ mod tests {
 
     #[test]
     fn test_write_outputs_correct_content() {
-        let mut fixture = ConsoleWriter::new(MockWriter::default());
+        let mut fixture = WriterWrapper::new(MockWriter::default());
         fixture.write("test message").unwrap();
         let actual = fixture.message().unwrap();
         let expected = "test message".to_string();
@@ -134,7 +134,7 @@ mod tests {
 
     #[test]
     fn test_writeln_outputs_correct_content() {
-        let mut fixture = ConsoleWriter::new(MockWriter::default());
+        let mut fixture = WriterWrapper::new(MockWriter::default());
         fixture.writeln("test message").unwrap();
         let actual = fixture.message().unwrap();
         let expected = "test message\n".to_string();
