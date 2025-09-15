@@ -1,6 +1,5 @@
 mod console_writer;
 
-use std::io;
 use std::time::Instant;
 
 use anyhow::Result;
@@ -16,7 +15,7 @@ pub struct SpinnerManager {
     start_time: Option<Instant>,
     message: Option<String>,
     tracker: Option<JoinHandle<()>>,
-    console_writer: ConsoleWriter<io::Stdout>,
+    console_writer: ConsoleWriter,
 }
 
 impl Default for SpinnerManager {
@@ -32,7 +31,7 @@ impl SpinnerManager {
             start_time: None,
             message: None,
             tracker: None,
-            console_writer: ConsoleWriter::stdout(),
+            console_writer: ConsoleWriter::new(),
         }
     }
 
@@ -136,10 +135,11 @@ impl SpinnerManager {
 
         // Then print the message if provided
         if let Some(msg) = message {
+            use console_writer::Writer;
             if new_line {
-                self.console_writer.writeln(msg)?;
+                self.console_writer.writeln(&msg)?;
             } else {
-                self.console_writer.write(msg)?;
+                self.console_writer.write(&msg)?;
             }
         }
 
