@@ -219,6 +219,46 @@ impl<S: AgentService> Orchestrator<S> {
         })
     }
 
+    fn is_happy(input: &str) -> bool {
+        let mut lines = input.lines().peekable();
+        let mut in_code_block = false;
+        let mut in_table = false;
+
+        while let Some(line) = lines.next() {
+            let trimmed = line.trim();
+
+            // --- CODE BLOCK CHECK ---
+            if trimmed.starts_with("```") {
+                in_code_block = !in_code_block;
+                continue;
+            }
+
+            // --- TABLE CHECK ---
+            if !in_code_block { // ignore tables inside code blocks
+                if !in_table {
+                    // Look for potential table header
+                    if trimmed.contains('|') {
+                        if let Some(next) = lines.peek() {
+                            let next_trimmed = next.trim();
+                            if next_trimmed.contains('|') && next_trimmed.contains('-') {
+                                in_table = true;
+                                lines.next(); // consume separator line
+                            }
+                        }
+                    }
+                } else {
+                    // Inside a table: table ends when line doesn’t look like a row
+                    if !trimmed.contains('|') {
+                        in_table = false;
+                    }
+                }
+            }
+        }
+
+        // Valid only if neither code blocks nor tables are left open
+        !in_code_block && !in_table
+    }
+
     async fn stream_chat_turn(
         &self,
         model_id: &ModelId,
@@ -240,6 +280,7 @@ impl<S: AgentService> Orchestrator<S> {
         let mut usage: Usage = Default::default();
         let mut content = String::new();
 
+        let mut print_buffer = String::new();
         while let Some(message) = response.next().await {
             let message = message?;
             messages.push(message.clone());
@@ -253,11 +294,30 @@ impl<S: AgentService> Orchestrator<S> {
             if let Some(content_part) = &message.content {
                 let content_str = content_part.as_str();
                 content.push_str(content_str);
-                self.send(ChatResponse::TaskMessage {
-                    content: ChatResponseContent::PlainText(content_str.to_string()),
-                })
-                .await?;
+                print_buffer.push_str(content_str);
+
+                // Check if we have atleast one full line
+                if let Some(last_newline) = print_buffer.rfind('\n') {
+
+                    // Take the part of the buffer up to and including the last newline
+                    let line_to_print = &print_buffer[..=last_newline];
+                    if !Self::is_happy(&line_to_print) {
+                        continue;
+                    }
+                    
+                    self.send(ChatResponse::TaskMessage {
+                        content: ChatResponseContent::Markdown(line_to_print.to_string()),
+                    }).await?;
+
+                    print_buffer = print_buffer[last_newline + 1..].to_string();
+                }
             }
+        }
+        // After the loop, send any remaining content in the buffer
+        if !print_buffer.is_empty() {
+            self.send(ChatResponse::TaskMessage {
+                content: ChatResponseContent::Markdown(print_buffer),
+            }).await?;
         }
 
         // Build the full message from collected messages
@@ -509,14 +569,14 @@ impl<S: AgentService> Orchestrator<S> {
                 // If task is completed we would have already displayed a message so we can
                 // ignore the content that's collected from the stream
                 // NOTE: Important to send the content messages before the tool call happens
-                self.send(ChatResponse::TaskMessage {
-                    content: ChatResponseContent::Markdown(
-                        remove_tag_with_prefix(&content, "forge_")
-                            .as_str()
-                            .to_string(),
-                    ),
-                })
-                .await?;
+                // self.send(ChatResponse::TaskMessage {
+                //     content: ChatResponseContent::Markdown(
+                //         remove_tag_with_prefix(&content, "forge_")
+                //             .as_str()
+                //             .to_string(),
+                //     ),
+                // })
+                // .await?;
             }
 
             if let Some(reasoning) = reasoning.as_ref()
@@ -565,14 +625,14 @@ impl<S: AgentService> Orchestrator<S> {
                 // No tools were called in the previous turn nor were they called in this step;
                 // Means that this is conversation.
 
-                self.send(ChatResponse::TaskMessage {
-                    content: ChatResponseContent::Markdown(
-                        remove_tag_with_prefix(&content, "forge_")
-                            .as_str()
-                            .to_string(),
-                    ),
-                })
-                .await?;
+                // self.send(ChatResponse::TaskMessage {
+                //     content: ChatResponseContent::Markdown(
+                //         remove_tag_with_prefix(&content, "forge_")
+                //             .as_str()
+                //             .to_string(),
+                //     ),
+                // })
+                // .await?;
                 is_complete = true
             } else if turn_has_tool_calls && !has_tool_calls {
                 // Since no tool calls are present, which doesn't mean task is complete so
