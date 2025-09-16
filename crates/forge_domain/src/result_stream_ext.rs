@@ -2,8 +2,9 @@ use anyhow::Context as _;
 use tokio_stream::StreamExt;
 
 use crate::reasoning::{Reasoning, ReasoningFull};
+use crate::xml::remove_tag_with_prefix;
 use crate::{
-    ArcSender, ChatCompletionMessage, ChatCompletionMessageFull, ChatResponse, ToolCallFull,
+    ArcSender, ChatCompletionMessage, ChatCompletionMessageFull, ChatResponse, ChatResponseContent, ToolCallFull,
     ToolCallPart, Usage,
 };
 
@@ -66,6 +67,17 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
                 // Process content
                 if let Some(content_part) = message.content.as_ref() {
                     content.push_str(content_part.as_str());
+
+                    // Stream content chunk if sender is available
+                    if let Some(ref sender) = sender && !content_part.is_empty() {
+                        // Apply the same tag removal as in orchestrator
+                        let cleaned_content = remove_tag_with_prefix(content_part.as_str(), "forge_");
+                        let _ = sender
+                            .send(Ok(ChatResponse::TaskMessage {
+                                content: ChatResponseContent::Markdown(cleaned_content),
+                            }))
+                            .await;
+                    }
 
                     // Check for XML tool calls in the content, but only interrupt if flag is set
                     if should_interrupt_for_xml {

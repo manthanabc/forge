@@ -15,7 +15,7 @@ use forge_domain::{
     ChatResponseContent, McpConfig, McpServerConfig, Metrics, Provider, Scope, TitleFormat,
 };
 use forge_fs::ForgeFS;
-use forge_spinner::{WriterWrapper, ForgeSpinner, SpinnerManager, StdoutWriter};
+use forge_spinner::{ForgeSpinner, SpinnerManager, StdoutWriter};
 use forge_tracker::ToolCallPayload;
 use merge::Merge;
 use serde::Deserialize;
@@ -771,7 +771,8 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 ChatResponseContent::PlainText(text) => self.writeln(text)?,
                 ChatResponseContent::Markdown(text) => {
                     tracing::info!(message = %text, "Agent Response");
-                    self.writeln(self.markdown.render(&text))?;
+                    // For streaming, render each chunk immediately
+                    self.spinner.write(self.markdown.render(&text))?;
                 }
             },
             ChatResponse::ToolCallStart(_) => {
