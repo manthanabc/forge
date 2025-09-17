@@ -71,9 +71,11 @@ impl<W: Writer, S: Spinner> SpinnerManager<W, S> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use pretty_assertions::assert_eq;
     use std::io;
+
+    use pretty_assertions::assert_eq;
+
+    use super::*;
 
     impl Default for SpinnerManager<WriterWrapper<TestWriter>, TestSpinner> {
         fn default() -> Self {
@@ -170,7 +172,7 @@ mod tests {
         assert_eq!(fixture.message, None);
 
         // writer should add new line.
-        assert_eq!(fixture.writer.message(),Some(&"completed\n".to_string()))
+        assert_eq!(fixture.writer.message(), Some(&"completed\n".to_string()))
     }
 
     #[test]
@@ -199,7 +201,10 @@ mod tests {
         // when we write something, spinner should be stopped.
         assert_eq!(fixture.spinner.is_running(), true);
         assert_eq!(fixture.message, Some("processing".to_string()));
-        assert_eq!(fixture.writer.message(), Some(&"output message\n".to_string()));
+        assert_eq!(
+            fixture.writer.message(),
+            Some(&"output message\n".to_string())
+        );
     }
 
     #[test]
@@ -212,6 +217,9 @@ mod tests {
         assert!(actual.is_ok());
         assert_eq!(fixture.spinner.is_running(), false);
         assert_eq!(fixture.message, Some("processing".to_string()));
-        assert_eq!(fixture.writer.message(), Some(&"output message".to_string()));
+        assert_eq!(
+            fixture.writer.message(),
+            Some(&"output message".to_string())
+        );
     }
 }

@@ -1,5 +1,10 @@
 use derive_setters::Setters;
+use lazy_regex::regex;
 use regex::Regex;
+use syntect::easy::HighlightLines;
+use syntect::highlighting::ThemeSet;
+use syntect::parsing::SyntaxSet;
+use syntect::util::{LinesWithEndings, as_24_bit_terminal_escaped};
 use termimad::crossterm::style::{Attribute, Color};
 use termimad::{CompoundStyle, LineStyle, MadSkin};
 
@@ -40,9 +45,7 @@ impl MarkdownFormat {
         // Strip excessive newlines before rendering
         let processed_content = self.strip_excessive_newlines(&content_string);
 
-        self.skin
-            .term_text(&processed_content)
-            .to_string()
+        self.skin.term_text(&processed_content).to_string()
     }
 
     /// Strip excessive consecutive newlines from content
@@ -69,17 +72,19 @@ impl MarkdownFormat {
 
 #[derive(Clone)]
 pub struct MarkdownWriter {
-    skin: MadSkin,
     buffer: String,
+    skin: MadSkin,
+    ss: SyntaxSet,
+    theme: syntect::highlighting::Theme,
 }
 
 impl MarkdownWriter {
     /// Creates a new streaming markdown writer.
     pub fn new(skin: MadSkin) -> Self {
-        Self {
-            skin,
-            buffer: String::new(),
-        }
+        let ss = SyntaxSet::load_defaults_newlines();
+        let ts = ThemeSet::load_defaults();
+        let theme = ts.themes["Solarized (dark)"].clone();
+        Self { buffer: String::new(), skin, ss, theme }
     }
 
     /// Processes a chunk of markdown, rendering and writing completed parts.
@@ -88,15 +93,71 @@ impl MarkdownWriter {
         F: FnMut(&str) -> std::io::Result<()>,
     {
         self.buffer.push_str(chunk);
-
-        if let Some(pos) = self.buffer.rfind("\n\n") {
-            let (to_render, remaining) = self.buffer.split_at(pos + 2);
-            let rendered = self.skin.term_text(to_render);
-            writer(&rendered.to_string())?;
-            self.buffer = remaining.to_string();
-        }
-
+        self.try_render(&mut writer)?;
         Ok(())
+    }
+
+    fn try_render<F>(&mut self, writer: &mut F) -> std::io::Result<()>
+    where
+        F: FnMut(&str) -> std::io::Result<()>,
+    {
+        if let Some(pos) = Self::find_last_safe_split(&self.buffer) {
+            let complete = &self.buffer[0..pos];
+            let processed = self.process_code_blocks(complete);
+            let rendered = self.skin.text(&processed, None);
+            // print!("{}",&rendered.to_string());
+            writer(&rendered.to_string())?;
+            self.buffer = self.buffer[pos..].to_string();
+        }
+        Ok(())
+    }
+
+    fn find_last_safe_split(buffer: &str) -> Option<usize> {
+        let mut last_safe = None;
+        let mut in_code_block = false;
+        let bytes = buffer.as_bytes();
+        let mut i = 0;
+        while i < bytes.len() {
+            if i + 2 < bytes.len() && &bytes[i..i + 3] == b"```" {
+                in_code_block = !in_code_block;
+                i += 3;
+                continue;
+            }
+            if !in_code_block && i + 1 < bytes.len() && bytes[i] == b'\n' && bytes[i + 1] == b'\n' {
+                last_safe = Some(i + 2);
+            }
+            i += 1;
+        }
+        last_safe
+    }
+
+    fn process_code_blocks(&self, text: &str) -> String {
+        let re = regex!(r"(?s)```(\w+)?\n(.*?)(```|\z)");
+        let mut result = text.to_string();
+        for cap in re.captures_iter(text) {
+            let lang = cap.get(1).map(|m| m.as_str()).unwrap_or("txt");
+            let ext = match lang {
+                "rust" => "rs",
+                "python" => "py",
+                _ => lang,
+            };
+            let code = cap.get(2).unwrap().as_str();
+            let syntax = self
+                .ss
+                .find_syntax_by_extension(ext)
+                .unwrap_or_else(|| self.ss.find_syntax_plain_text());
+            let mut h = HighlightLines::new(syntax, &self.theme);
+            let mut highlighted = String::new();
+            for line in LinesWithEndings::from(code) {
+                let ranges: Vec<(syntect::highlighting::Style, &str)> =
+                    h.highlight_line(line, &self.ss).unwrap();
+                highlighted.push_str(&as_24_bit_terminal_escaped(&ranges[..], false));
+            }
+            highlighted.push_str("\x1b[0m");
+            let full_match = cap.get(0).unwrap().as_str();
+            result = result.replace(full_match, &highlighted);
+        }
+        result
     }
 
     /// Renders and writes any remaining content from the buffer.
@@ -105,7 +166,8 @@ impl MarkdownWriter {
         F: FnMut(&str) -> std::io::Result<()>,
     {
         if !self.buffer.is_empty() {
-            let rendered = self.skin.term_text(&self.buffer);
+            let processed = self.process_code_blocks(&self.buffer);
+            let rendered = self.skin.text(&processed, None);
             writer(&rendered.to_string())?;
             self.buffer.clear();
         }

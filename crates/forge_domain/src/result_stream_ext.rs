@@ -4,8 +4,8 @@ use tokio_stream::StreamExt;
 use crate::reasoning::{Reasoning, ReasoningFull};
 use crate::xml::remove_tag_with_prefix;
 use crate::{
-    ArcSender, ChatCompletionMessage, ChatCompletionMessageFull, ChatResponse, ChatResponseContent, ToolCallFull,
-    ToolCallPart, Usage,
+    ArcSender, ChatCompletionMessage, ChatCompletionMessageFull, ChatResponse, ChatResponseContent,
+    ToolCallFull, ToolCallPart, Usage,
 };
 
 /// Checks if the accumulated content has potential forge tag starting
@@ -78,16 +78,19 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
                 // Process content
                 if let Some(content_part) = message.content.as_ref() {
                     content.push_str(content_part.as_str());
-
                     // Check for potential XML tool calls to start buffering
                     if is_potential_forge(&content) {
                         buffering_started = true;
                     }
 
                     // Stream content chunk if sender is available and not buffering
-                    if let Some(ref sender) = sender && !content_part.is_empty() && !buffering_started {
+                    if let Some(ref sender) = sender
+                        && !content_part.is_empty()
+                        && !buffering_started
+                    {
                         // Apply the same tag removal as in orchestrator
-                        let cleaned_content = remove_tag_with_prefix(content_part.as_str(), "forge_");
+                        let cleaned_content =
+                            remove_tag_with_prefix(content_part.as_str(), "forge_");
                         let _ = sender
                             .send(Ok(ChatResponse::TaskMessage {
                                 content: ChatResponseContent::Markdown(cleaned_content),
@@ -110,6 +113,15 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
                     }
                 }
             }
+        }
+
+        // Signa0l Reasning over
+        if let Some(ref sender) = sender {
+            let _ = sender
+                .send(Ok(ChatResponse::TaskMessage {
+                    content: ChatResponseContent::Markdown("\n".to_string()),
+                }))
+                .await?;
         }
 
         // Get the full content from all messages

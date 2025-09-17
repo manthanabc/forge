@@ -2,9 +2,6 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::sync::Arc;
 
-use termimad::crossterm::style::{Attribute, Color};
-use termimad::{CompoundStyle, LineStyle, MadSkin};
-
 use anyhow::{Context, Result};
 use colored::Colorize;
 use convert_case::{Case, Casing};
@@ -23,6 +20,8 @@ use forge_tracker::ToolCallPayload;
 use merge::Merge;
 use serde::Deserialize;
 use serde_json::Value;
+use termimad::crossterm::style::{Attribute, Color};
+use termimad::{CompoundStyle, LineStyle, MadSkin};
 use tokio_stream::StreamExt;
 
 use crate::cli::{Cli, McpCommand, TopLevelCommand, Transport};
@@ -52,7 +51,6 @@ impl From<PartialEvent> for Event {
         Event::new(value.name, Some(value.value))
     }
 }
-
 
 pub struct UI<A, F: Fn() -> A> {
     markdown: MarkdownWriter,
@@ -161,7 +159,8 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             spinner: SpinnerManager::new(StdoutWriter::default(), ForgeSpinner::new()),
             markdown: {
                 let mut skin = MadSkin::default();
-                let compound_style = CompoundStyle::new(Some(Color::Cyan), None, Attribute::Bold.into());
+                let compound_style =
+                    CompoundStyle::new(Some(Color::Cyan), None, Attribute::Bold.into());
                 skin.inline_code = compound_style.clone();
 
                 let codeblock_style = CompoundStyle::new(None, None, Default::default());
@@ -789,10 +788,9 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 ChatResponseContent::Markdown(text) => {
                     tracing::info!(message = %text, "Agent Response");
                     self.markdown.add_chunk(&text, |s: &str| {
-                        self.spinner.write(s).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
-                    })?;
-                    self.markdown.flush(|s: &str| {
-                        self.spinner.write(s).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+                        self.spinner
+                            .write(s)
+                            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
                     })?;
                 }
             },
