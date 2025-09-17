@@ -772,7 +772,8 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 ChatResponseContent::Markdown(text) => {
                     tracing::info!(message = %text, "Agent Response");
                     // For streaming, render each chunk immediately
-                    self.spinner.write(self.markdown.render(&text))?;
+                    // self.spinner.write(self.markdown.render(&text))?;
+                    self.spinner.write(&text)?;
                 }
             },
             ChatResponse::ToolCallStart(_) => {
