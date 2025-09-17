@@ -2,6 +2,9 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::sync::Arc;
 
+use termimad::crossterm::style::{Attribute, Color};
+use termimad::{CompoundStyle, LineStyle, MadSkin};
+
 use anyhow::{Context, Result};
 use colored::Colorize;
 use convert_case::{Case, Casing};
@@ -10,7 +13,7 @@ use forge_api::{
     EVENT_USER_TASK_INIT, EVENT_USER_TASK_UPDATE, Event, InterruptionReason, Model, ModelId,
     ToolName, Workflow,
 };
-use forge_display::MarkdownFormat;
+use forge_display::MarkdownWriter;
 use forge_domain::{
     ChatResponseContent, McpConfig, McpServerConfig, Metrics, Provider, Scope, TitleFormat,
 };
@@ -50,8 +53,9 @@ impl From<PartialEvent> for Event {
     }
 }
 
+
 pub struct UI<A, F: Fn() -> A> {
-    markdown: MarkdownFormat,
+    markdown: MarkdownWriter,
     state: UIState,
     api: Arc<F::Output>,
     new_api: Arc<F>,
@@ -155,7 +159,20 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             cli,
             command,
             spinner: SpinnerManager::new(StdoutWriter::default(), ForgeSpinner::new()),
-            markdown: MarkdownFormat::new(),
+            markdown: {
+                let mut skin = MadSkin::default();
+                let compound_style = CompoundStyle::new(Some(Color::Cyan), None, Attribute::Bold.into());
+                skin.inline_code = compound_style.clone();
+
+                let codeblock_style = CompoundStyle::new(None, None, Default::default());
+                skin.code_block = LineStyle::new(codeblock_style, Default::default());
+
+                let mut strikethrough_style = CompoundStyle::with_attr(Attribute::CrossedOut);
+                strikethrough_style.add_attr(Attribute::Dim);
+                skin.strikeout = strikethrough_style;
+
+                MarkdownWriter::new(skin)
+            },
             _guard: forge_tracker::init_tracing(env.log_path(), TRACKER.clone())?,
         })
     }
@@ -771,9 +788,12 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 ChatResponseContent::PlainText(text) => self.writeln(text)?,
                 ChatResponseContent::Markdown(text) => {
                     tracing::info!(message = %text, "Agent Response");
-                    // For streaming, render each chunk immediately
-                    // self.spinner.write(self.markdown.render(&text))?;
-                    self.spinner.write(&text)?;
+                    self.markdown.add_chunk(&text, |s: &str| {
+                        self.spinner.write(s).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+                    })?;
+                    self.markdown.flush(|s: &str| {
+                        self.spinner.write(s).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+                    })?;
                 }
             },
             ChatResponse::ToolCallStart(_) => {

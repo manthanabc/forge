@@ -41,7 +41,7 @@ impl MarkdownFormat {
         let processed_content = self.strip_excessive_newlines(&content_string);
 
         self.skin
-            .term_text(&content_string)
+            .term_text(&processed_content)
             .to_string()
     }
 
@@ -59,6 +59,57 @@ impl MarkdownFormat {
         let replacement = "\n".repeat(self.max_consecutive_newlines);
 
         re.replace_all(content, replacement.as_str()).to_string()
+    }
+
+    /// Creates a streaming markdown processor.
+    pub fn writer(&self) -> MarkdownWriter {
+        MarkdownWriter::new(self.skin.clone())
+    }
+}
+
+#[derive(Clone)]
+pub struct MarkdownWriter {
+    skin: MadSkin,
+    buffer: String,
+}
+
+impl MarkdownWriter {
+    /// Creates a new streaming markdown writer.
+    pub fn new(skin: MadSkin) -> Self {
+        Self {
+            skin,
+            buffer: String::new(),
+        }
+    }
+
+    /// Processes a chunk of markdown, rendering and writing completed parts.
+    pub fn add_chunk<F>(&mut self, chunk: &str, mut writer: F) -> std::io::Result<()>
+    where
+        F: FnMut(&str) -> std::io::Result<()>,
+    {
+        self.buffer.push_str(chunk);
+
+        if let Some(pos) = self.buffer.rfind("\n\n") {
+            let (to_render, remaining) = self.buffer.split_at(pos + 2);
+            let rendered = self.skin.term_text(to_render);
+            writer(&rendered.to_string())?;
+            self.buffer = remaining.to_string();
+        }
+
+        Ok(())
+    }
+
+    /// Renders and writes any remaining content from the buffer.
+    pub fn flush<F>(&mut self, mut writer: F) -> std::io::Result<()>
+    where
+        F: FnMut(&str) -> std::io::Result<()>,
+    {
+        if !self.buffer.is_empty() {
+            let rendered = self.skin.term_text(&self.buffer);
+            writer(&rendered.to_string())?;
+            self.buffer.clear();
+        }
+        Ok(())
     }
 }
 
