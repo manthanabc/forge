@@ -19,14 +19,14 @@ impl<W: Writer, S: Spinner> SpinnerManager<W, S> {
 
     // Starts the spinner
     pub fn start(&mut self, message: Option<&str>) -> Result<()> {
-        let _ = self.spinner.start(message)?;
+        self.spinner.start(message)?;
         self.message = message.map(|m| m.to_string());
         Ok(())
     }
 
     /// Stop the active spinner if any
     pub fn stop(&mut self, message: Option<String>) -> Result<()> {
-        let _ = self.stop_internal(message, true)?;
+        self.stop_internal(message, true)?;
         Ok(())
     }
 

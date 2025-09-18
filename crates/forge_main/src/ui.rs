@@ -156,7 +156,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             console: Console::new(env.clone(), command.clone()),
             cli,
             command,
-            spinner: SpinnerManager::new(StdoutWriter::default(), ForgeSpinner::new()),
+            spinner: SpinnerManager::new(StdoutWriter, ForgeSpinner::new()),
             markdown: {
                 let mut skin = MadSkin::default();
                 let compound_style =
@@ -728,11 +728,8 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 }
             }
         }
-        self.markdown.flush(|s: &str| {
-            self.spinner
-                .write(s)
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
-        })?;
+        self.markdown
+            .flush(|s: &str| self.spinner.write(s).map_err(std::io::Error::other))?;
 
         self.spinner.stop(None)?;
 
@@ -793,9 +790,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 ChatResponseContent::Markdown(text) => {
                     tracing::info!(message = %text, "Agent Response");
                     self.markdown.add_chunk(&text, |s: &str| {
-                        self.spinner
-                            .write(s)
-                            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+                        self.spinner.write(s).map_err(std::io::Error::other)
                     })?;
                 }
             },
@@ -832,11 +827,8 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             }
             ChatResponse::Interrupt { reason } => {
                 self.spinner.stop(None)?;
-                self.markdown.flush(|s: &str| {
-                    self.spinner
-                        .write(s)
-                        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
-                })?;
+                self.markdown
+                    .flush(|s: &str| self.spinner.write(s).map_err(std::io::Error::other))?;
 
                 let title = match reason {
                     InterruptionReason::MaxRequestPerTurnLimitReached { limit } => {
@@ -854,11 +846,8 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 self.spinner.write(content.dimmed().to_string())?;
             }
             ChatResponse::TaskComplete => {
-                self.markdown.flush(|s: &str| {
-                    self.spinner
-                        .write(s)
-                        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
-                })?;
+                self.markdown
+                    .flush(|s: &str| self.spinner.write(s).map_err(std::io::Error::other))?;
                 if let Some(conversation_id) = self.state.conversation_id.as_ref() {
                     let conversation = self.api.conversation(conversation_id).await?;
                     self.on_completion(conversation.unwrap().metrics).await?;

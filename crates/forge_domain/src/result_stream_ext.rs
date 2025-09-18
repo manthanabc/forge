@@ -83,7 +83,7 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
                 // Process content
                 if let Some(content_part) = message.content.as_ref() {
                     content.push_str(content_part.as_str());
-                    buffering_started =  is_potentially_tool_call(&content);
+                    buffering_started = is_potentially_tool_call(&content);
 
                     // Stream content chunk if sender is available and not buffering
                     if let Some(ref sender) = sender
@@ -96,7 +96,7 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
                         let prefixed_content = if last_was_reasoning {
                             format!("\n{}", cleaned_content)
                         } else {
-                            format!("{}", cleaned_content)
+                            cleaned_content
                         };
 
                         let _ = sender
@@ -148,16 +148,14 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
         }
 
         // If buffering occurred, send the remaining cleaned content at the end
-        if buffering_started {
-            if let Some(ref sender) = sender {
-                let cleaned_content = remove_tag_with_prefix(content.as_str(), "forge_");
-                if !cleaned_content.is_empty() {
-                    let _ = sender
-                        .send(Ok(ChatResponse::TaskMessage {
-                            content: ChatResponseContent::Markdown(cleaned_content),
-                        }))
-                        .await;
-                }
+        if buffering_started && let Some(ref sender) = sender {
+            let cleaned_content = remove_tag_with_prefix(content.as_str(), "forge_");
+            if !cleaned_content.is_empty() {
+                let _ = sender
+                    .send(Ok(ChatResponse::TaskMessage {
+                        content: ChatResponseContent::Markdown(cleaned_content),
+                    }))
+                    .await;
             }
         }
 
