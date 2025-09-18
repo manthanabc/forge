@@ -138,6 +138,7 @@ impl MarkdownWriter {
             let lang = cap.get(1).map(|m| m.as_str()).unwrap_or("txt");
             let ext = match lang {
                 "rust" => "rs",
+                "javascript" => "js",
                 "python" => "py",
                 _ => lang,
             };

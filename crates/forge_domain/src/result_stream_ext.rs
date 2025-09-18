@@ -8,11 +8,14 @@ use crate::{
     ToolCallFull, ToolCallPart, Usage,
 };
 
-/// Checks if the accumulated content has potential forge tag starting
-fn is_potential_forge(content: &str) -> bool {
+fn is_potentially_tool_call(content: &str) -> bool {
+    if content.contains("<forge") {
+        return true;
+    }
+
     if let Some(last_lt) = content.rfind('<') {
         let after = &content[last_lt + 1..];
-        after.is_empty() || after.starts_with('f') && "forge".starts_with(after)
+        "forge".starts_with(after)
     } else {
         false
     }
@@ -52,6 +55,7 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
         let mut xml_tool_calls = None;
         let mut tool_interrupted = false;
         let mut buffering_started = false;
+        let mut last_was_reasoning = false;
 
         while let Some(message) = self.next().await {
             let message =
@@ -70,6 +74,7 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
                         content: reasoning.as_str().to_string(),
                     }))
                     .await;
+                last_was_reasoning = true;
             }
 
             if !tool_interrupted {
@@ -78,10 +83,7 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
                 // Process content
                 if let Some(content_part) = message.content.as_ref() {
                     content.push_str(content_part.as_str());
-                    // Check for potential XML tool calls to start buffering
-                    if is_potential_forge(&content) {
-                        buffering_started = true;
-                    }
+                    buffering_started =  is_potentially_tool_call(&content);
 
                     // Stream content chunk if sender is available and not buffering
                     if let Some(ref sender) = sender
@@ -91,11 +93,18 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
                         // Apply the same tag removal as in orchestrator
                         let cleaned_content =
                             remove_tag_with_prefix(content_part.as_str(), "forge_");
+                        let prefixed_content = if last_was_reasoning {
+                            format!("\n{}", cleaned_content)
+                        } else {
+                            format!("{}", cleaned_content)
+                        };
+
                         let _ = sender
                             .send(Ok(ChatResponse::TaskMessage {
-                                content: ChatResponseContent::Markdown(cleaned_content),
+                                content: ChatResponseContent::Markdown(prefixed_content),
                             }))
                             .await;
+                        last_was_reasoning = false;
                     }
 
                     // Check for XML tool calls in the content, but only interrupt if flag is set
@@ -113,15 +122,6 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
                     }
                 }
             }
-        }
-
-        // Signa0l Reasning over
-        if let Some(ref sender) = sender {
-            let _ = sender
-                .send(Ok(ChatResponse::TaskMessage {
-                    content: ChatResponseContent::Markdown("\n".to_string()),
-                }))
-                .await?;
         }
 
         // Get the full content from all messages
@@ -144,6 +144,20 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
                     "Response interrupted by tool result. Use only one tool at the end of the message",
                 );
                 content.push_str("</forge_feedback>");
+            }
+        }
+
+        // If buffering occurred, send the remaining cleaned content at the end
+        if buffering_started {
+            if let Some(ref sender) = sender {
+                let cleaned_content = remove_tag_with_prefix(content.as_str(), "forge_");
+                if !cleaned_content.is_empty() {
+                    let _ = sender
+                        .send(Ok(ChatResponse::TaskMessage {
+                            content: ChatResponseContent::Markdown(cleaned_content),
+                        }))
+                        .await;
+                }
             }
         }
 
@@ -202,20 +216,6 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
         // Check for empty completion - map to retryable error for retry
         if content.trim().is_empty() && tool_calls.is_empty() && finish_reason.is_none() {
             return Err(crate::Error::EmptyCompletion.into_retryable().into());
-        }
-
-        // If buffering occurred, send the remaining cleaned content at the end
-        if buffering_started {
-            if let Some(ref sender) = sender {
-                let cleaned_content = remove_tag_with_prefix(content.as_str(), "forge_");
-                if !cleaned_content.is_empty() {
-                    let _ = sender
-                        .send(Ok(ChatResponse::TaskMessage {
-                            content: ChatResponseContent::Markdown(cleaned_content),
-                        }))
-                        .await;
-                }
-            }
         }
 
         Ok(ChatCompletionMessageFull {
