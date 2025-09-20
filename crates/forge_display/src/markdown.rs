@@ -87,29 +87,24 @@ impl MarkdownWriter {
         Self { buffer: String::new(), skin, ss, theme }
     }
 
-    /// Processes a chunk of markdown, rendering and writing completed parts.
-    pub fn add_chunk<F>(&mut self, chunk: &str, mut writer: F) -> std::io::Result<()>
-    where
-        F: FnMut(&str) -> std::io::Result<()>,
-    {
+    /// Processes a chunk of markdown, returning rendered content if available.
+    pub fn add_chunk(&mut self, chunk: &str) -> std::io::Result<Option<String>> {
         self.buffer.push_str(chunk);
-        self.try_render(&mut writer)?;
-        Ok(())
+        self.try_render()
     }
 
-    fn try_render<F>(&mut self, writer: &mut F) -> std::io::Result<()>
-    where
-        F: FnMut(&str) -> std::io::Result<()>,
-    {
+    fn try_render(&mut self) -> std::io::Result<Option<String>> {
         if let Some(pos) = Self::find_last_safe_split(&self.buffer) {
             let complete = &self.buffer[0..pos];
             let processed = self.process_code_blocks(complete);
             let rendered = self.skin.text(&processed, None);
             // print!("{}",&rendered.to_string());
-            writer(&rendered.to_string())?;
+            let result = rendered.to_string();
             self.buffer = self.buffer[pos..].to_string();
+            Ok(Some(result))
+        } else {
+            Ok(None)
         }
-        Ok(())
     }
 
     fn find_last_safe_split(buffer: &str) -> Option<usize> {
@@ -161,18 +156,17 @@ impl MarkdownWriter {
         result
     }
 
-    /// Renders and writes any remaining content from the buffer.
-    pub fn flush<F>(&mut self, mut writer: F) -> std::io::Result<()>
-    where
-        F: FnMut(&str) -> std::io::Result<()>,
-    {
+    /// Renders and returns any remaining content from the buffer.
+    pub fn flush(&mut self) -> std::io::Result<Option<String>> {
         if !self.buffer.is_empty() {
             let processed = self.process_code_blocks(&self.buffer);
             let rendered = self.skin.text(&processed, None);
-            writer(&rendered.to_string())?;
+            let result = rendered.to_string();
             self.buffer.clear();
+            Ok(Some(result))
+        } else {
+            Ok(None)
         }
-        Ok(())
     }
 }
 
@@ -262,19 +256,21 @@ mod tests {
     fn test_markdown_writer() {
         let fixture = "# Test Heading\n\nThis is a paragraph.";
         let mut writer = MarkdownWriter::new(MadSkin::default());
-        let mut output = String::new();
 
-        let actual = writer.add_chunk(fixture, |chunk| {
-            output.push_str(chunk);
-            Ok(())
-        });
-        assert!(actual.is_ok());
+        let result = writer.add_chunk(fixture);
+        assert!(result.is_ok());
 
-        let flush_result = writer.flush(|chunk| {
-            output.push_str(chunk);
-            Ok(())
-        });
+        let flush_result = writer.flush();
         assert!(flush_result.is_ok());
+
+        // Collect all output
+        let mut output = String::new();
+        if let Some(rendered) = result.unwrap() {
+            output.push_str(&rendered);
+        }
+        if let Some(remaining) = flush_result.unwrap() {
+            output.push_str(&remaining);
+        }
 
         let actual_clean = strip_ansi_escapes::strip_str(&output).trim().to_string();
 
@@ -287,19 +283,21 @@ mod tests {
     fn test_markdown_writer_code_block() {
         let fixture = "```rust\nfn main() {\n    println!(\"Hello\");\n}\n```";
         let mut writer = MarkdownWriter::new(MadSkin::default());
-        let mut output = String::new();
 
-        let actual = writer.add_chunk(fixture, |chunk| {
-            output.push_str(chunk);
-            Ok(())
-        });
-        assert!(actual.is_ok());
+        let result = writer.add_chunk(fixture);
+        assert!(result.is_ok());
 
-        let flush_result = writer.flush(|chunk| {
-            output.push_str(chunk);
-            Ok(())
-        });
+        let flush_result = writer.flush();
         assert!(flush_result.is_ok());
+
+        // Collect all output
+        let mut output = String::new();
+        if let Some(rendered) = result.unwrap() {
+            output.push_str(&rendered);
+        }
+        if let Some(remaining) = flush_result.unwrap() {
+            output.push_str(&remaining);
+        }
 
         let actual_clean = strip_ansi_escapes::strip_str(&output).trim().to_string();
 

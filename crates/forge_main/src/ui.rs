@@ -728,8 +728,9 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 }
             }
         }
-        self.markdown
-            .flush(|s: &str| self.spinner.write(s).map_err(std::io::Error::other))?;
+        if let Some(remaining) = self.markdown.flush()? {
+            self.spinner.write(&remaining)?;
+        }
 
         self.spinner.stop(None)?;
 
@@ -789,9 +790,9 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 ChatResponseContent::PlainText(text) => self.writeln(text)?,
                 ChatResponseContent::Markdown(text) => {
                     tracing::info!(message = %text, "Agent Response");
-                    self.markdown.add_chunk(&text, |s: &str| {
-                        self.spinner.write(s).map_err(std::io::Error::other)
-                    })?;
+                    if let Some(rendered) = self.markdown.add_chunk(&text)? {
+                        self.spinner.write(&rendered)?;
+                    }
                 }
             },
             ChatResponse::ToolCallStart(_) => {
@@ -827,8 +828,9 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             }
             ChatResponse::Interrupt { reason } => {
                 self.spinner.stop(None)?;
-                self.markdown
-                    .flush(|s: &str| self.spinner.write(s).map_err(std::io::Error::other))?;
+                if let Some(remaining) = self.markdown.flush()? {
+                    self.spinner.write(&remaining)?;
+                }
 
                 let title = match reason {
                     InterruptionReason::MaxRequestPerTurnLimitReached { limit } => {
@@ -846,8 +848,9 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 self.spinner.write(content.dimmed().to_string())?;
             }
             ChatResponse::TaskComplete => {
-                self.markdown
-                    .flush(|s: &str| self.spinner.write(s).map_err(std::io::Error::other))?;
+                if let Some(remaining) = self.markdown.flush()? {
+                    self.spinner.write(&remaining)?;
+                }
                 if let Some(conversation_id) = self.state.conversation_id.as_ref() {
                     let conversation = self.api.conversation(conversation_id).await?;
                     self.on_completion(conversation.unwrap().metrics).await?;
