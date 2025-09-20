@@ -257,4 +257,54 @@ mod tests {
 
         assert_eq!(actual_clean, expected_clean);
     }
+
+    #[test]
+    fn test_markdown_writer() {
+        let fixture = "# Test Heading\n\nThis is a paragraph.";
+        let mut writer = MarkdownWriter::new(MadSkin::default());
+        let mut output = String::new();
+
+        let actual = writer.add_chunk(fixture, |chunk| {
+            output.push_str(chunk);
+            Ok(())
+        });
+        assert!(actual.is_ok());
+
+        let flush_result = writer.flush(|chunk| {
+            output.push_str(chunk);
+            Ok(())
+        });
+        assert!(flush_result.is_ok());
+
+        let actual_clean = strip_ansi_escapes::strip_str(&output).trim().to_string();
+
+        // Expected output should contain the heading and paragraph
+        assert!(actual_clean.contains("Test Heading"));
+        assert!(actual_clean.contains("This is a paragraph."));
+    }
+
+    #[test]
+    fn test_markdown_writer_code_block() {
+        let fixture = "```rust\nfn main() {\n    println!(\"Hello\");\n}\n```";
+        let mut writer = MarkdownWriter::new(MadSkin::default());
+        let mut output = String::new();
+
+        let actual = writer.add_chunk(fixture, |chunk| {
+            output.push_str(chunk);
+            Ok(())
+        });
+        assert!(actual.is_ok());
+
+        let flush_result = writer.flush(|chunk| {
+            output.push_str(chunk);
+            Ok(())
+        });
+        assert!(flush_result.is_ok());
+
+        let actual_clean = strip_ansi_escapes::strip_str(&output).trim().to_string();
+
+        // Expected output should contain the code
+        assert!(actual_clean.contains("fn main()"));
+        assert!(actual_clean.contains("println!(\"Hello\")"));
+    }
 }
