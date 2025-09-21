@@ -91,6 +91,12 @@ impl Provider {
             key: Some(key.into()),
         }
     }
+    pub fn zai_coding(key: &str) -> Provider {
+        Provider::OpenAI {
+            url: Url::parse(Provider::ZAI_CODING_URL).unwrap(),
+            key: Some(key.into()),
+        }
+    }
 
     pub fn cerebras(key: &str) -> Provider {
         Provider::OpenAI {
@@ -113,6 +119,21 @@ impl Provider {
         }
     }
 
+    pub fn vertex_ai(key: &str, project_id: &str, location: &str) -> anyhow::Result<Provider> {
+        let url = if location == "global" {
+            format!(
+                "https://aiplatform.googleapis.com/v1/projects/{}/locations/{}/endpoints/openapi/",
+                project_id, location
+            )
+        } else {
+            format!(
+                "https://{}-aiplatform.googleapis.com/v1/projects/{}/locations/{}/endpoints/openapi/",
+                location, project_id, location
+            )
+        };
+        Ok(Provider::OpenAI { url: Url::parse(&url)?, key: Some(key.into()) })
+    }
+
     pub fn key(&self) -> Option<&str> {
         match self {
             Provider::OpenAI { key, .. } => key.as_deref(),
@@ -129,6 +150,7 @@ impl Provider {
     pub const ANTHROPIC_URL: &str = "https://api.anthropic.com/v1/";
     pub const FORGE_URL: &str = "https://antinomy.ai/api/v1/";
     pub const ZAI_URL: &str = "https://api.z.ai/api/paas/v4/";
+    pub const ZAI_CODING_URL: &str = "https://api.z.ai/api/coding/paas/v4/";
     pub const CEREBRAS_URL: &str = "https://api.cerebras.ai/v1/";
 
     /// Converts the provider to it's base URL
@@ -136,6 +158,20 @@ impl Provider {
         match self {
             Provider::OpenAI { url, .. } => url.clone(),
             Provider::Anthropic { url, .. } => url.clone(),
+        }
+    }
+
+    pub fn model_url(&self) -> Url {
+        match self {
+            Provider::OpenAI { url, .. } => {
+                if self.is_zai_coding() {
+                    let base_url = Url::parse(Provider::ZAI_URL).unwrap();
+                    base_url.join("models").unwrap()
+                } else {
+                    url.join("models").unwrap()
+                }
+            }
+            Provider::Anthropic { url, .. } => url.join("models").unwrap(),
         }
     }
 
@@ -167,6 +203,13 @@ impl Provider {
         }
     }
 
+    pub fn is_zai_coding(&self) -> bool {
+        match self {
+            Provider::OpenAI { url, .. } => url.as_str().starts_with(Self::ZAI_CODING_URL),
+            Provider::Anthropic { .. } => false,
+        }
+    }
+
     pub fn is_cerebras(&self) -> bool {
         match self {
             Provider::OpenAI { url, .. } => url.as_str().starts_with(Self::CEREBRAS_URL),
@@ -192,6 +235,15 @@ impl Provider {
         match self {
             Provider::OpenAI { .. } => false,
             Provider::Anthropic { url, .. } => url.as_str().starts_with(Self::ANTHROPIC_URL),
+        }
+    }
+
+    pub fn is_vertex_ai(&self) -> bool {
+        match self {
+            Provider::OpenAI { url, key: _ } => url
+                .as_str()
+                .contains("aiplatform.googleapis.com/v1/projects/"),
+            Provider::Anthropic { .. } => false,
         }
     }
 }
@@ -318,5 +370,67 @@ mod tests {
 
         let fixture_other = Provider::openai("key");
         assert!(!fixture_other.is_xai());
+    }
+
+    #[test]
+    fn test_zai_coding_to_base_url() {
+        let fixture = Provider::zai_coding("test_key");
+        let actual = fixture.to_base_url();
+        let expected = Url::parse(Provider::ZAI_CODING_URL).unwrap();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_zai_coding_to_model_url() {
+        let fixture = Provider::zai_coding("test_key");
+        let actual = fixture.model_url();
+        let expected = Url::parse(Provider::ZAI_URL)
+            .unwrap()
+            .join("models")
+            .unwrap();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_regular_zai_to_base_url() {
+        let fixture = Provider::zai("test_key");
+        let actual = fixture.to_base_url();
+        let expected = Url::parse(Provider::ZAI_URL).unwrap();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_regular_zai_to_model_url() {
+        let fixture = Provider::zai("test_key");
+        let actual = fixture.model_url();
+        let expected = Url::parse(Provider::ZAI_URL)
+            .unwrap()
+            .join("models")
+            .unwrap();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_openai_to_base_url_and_model_url_same() {
+        let fixture = Provider::openai("test_key");
+        let base_url = fixture.to_base_url();
+        let model_url = fixture.model_url();
+        assert_eq!(base_url.join("models").unwrap(), model_url);
+    }
+
+    #[test]
+    fn test_vertex_ai_global_location() {
+        let fixture = Provider::vertex_ai("test_token", "forge-452914", "global").unwrap();
+        let actual = fixture.to_base_url();
+        let expected = Url::parse("https://aiplatform.googleapis.com/v1/projects/forge-452914/locations/global/endpoints/openapi/").unwrap();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_vertex_ai_regular_location() {
+        let fixture = Provider::vertex_ai("test_token", "test_project", "us-central1").unwrap();
+        let actual = fixture.to_base_url();
+        let expected = Url::parse("https://us-central1-aiplatform.googleapis.com/v1/projects/test_project/locations/us-central1/endpoints/openapi/").unwrap();
+        assert_eq!(actual, expected);
     }
 }

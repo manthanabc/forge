@@ -1,5 +1,7 @@
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::PathBuf;
 
+use derive_more::Display;
 use derive_setters::Setters;
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -53,19 +55,23 @@ pub struct Environment {
     /// Maximum execution time in seconds for a single tool call.
     /// Controls how long a tool can run before being terminated.
     pub tool_timeout: u64,
+    /// Whether to automatically open HTML dump files in the browser.
+    /// Controlled by FORGE_DUMP_AUTO_OPEN environment variable.
+    pub auto_open_dump: bool,
+    /// Custom history file path from FORGE_HISTORY_FILE environment variable.
+    /// If None, uses the default history path.
+    pub custom_history_path: Option<PathBuf>,
 }
 
 impl Environment {
-    pub fn db_path(&self) -> PathBuf {
-        self.base_path.clone()
-    }
-
     pub fn log_path(&self) -> PathBuf {
         self.base_path.join("logs")
     }
 
     pub fn history_path(&self) -> PathBuf {
-        self.base_path.join(".forge_history")
+        self.custom_history_path
+            .clone()
+            .unwrap_or(self.base_path.join(".forge_history"))
     }
     pub fn snapshot_path(&self) -> PathBuf {
         self.base_path.join("snapshots")
@@ -90,11 +96,36 @@ impl Environment {
     pub fn mcp_local_config(&self) -> PathBuf {
         self.cwd.join(".mcp.json")
     }
+
     pub fn version(&self) -> String {
         VERSION.to_string()
     }
+
     pub fn app_config(&self) -> PathBuf {
         self.base_path.join(".config.json")
+    }
+
+    pub fn database_path(&self) -> PathBuf {
+        self.base_path.join(".forge.db")
+    }
+
+    pub fn workspace_id(&self) -> WorkspaceId {
+        let mut hasher = DefaultHasher::default();
+        self.cwd.hash(&mut hasher);
+
+        WorkspaceId(hasher.finish())
+    }
+}
+
+#[derive(Clone, Copy, Display)]
+pub struct WorkspaceId(u64);
+impl WorkspaceId {
+    pub fn new(id: u64) -> Self {
+        WorkspaceId(id)
+    }
+
+    pub fn id(&self) -> u64 {
+        self.0
     }
 }
 
@@ -126,6 +157,8 @@ mod tests {
             http: HttpConfig::default(),
             max_file_size: 104857600,
             tool_timeout: 300,
+            auto_open_dump: false,
+            custom_history_path: None,
         };
 
         let actual = fixture.agent_cwd_path();
@@ -156,6 +189,8 @@ mod tests {
             http: HttpConfig::default(),
             max_file_size: 104857600,
             tool_timeout: 300,
+            auto_open_dump: false,
+            custom_history_path: None,
         };
 
         let agent_path = fixture.agent_path();

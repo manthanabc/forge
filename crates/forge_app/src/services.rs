@@ -152,13 +152,21 @@ pub trait ConversationService: Send + Sync {
 
     async fn upsert_conversation(&self, conversation: Conversation) -> anyhow::Result<()>;
 
-    async fn init_conversation(&self) -> anyhow::Result<Conversation>;
-
     /// This is useful when you want to perform several operations on a
     /// conversation atomically.
     async fn modify_conversation<F, T>(&self, id: &ConversationId, f: F) -> anyhow::Result<T>
     where
-        F: FnOnce(&mut Conversation) -> T + Send;
+        F: FnOnce(&mut Conversation) -> T + Send,
+        T: Send;
+
+    /// Find conversations with optional limit
+    async fn get_conversations(
+        &self,
+        limit: Option<usize>,
+    ) -> anyhow::Result<Option<Vec<Conversation>>>;
+
+    /// Find the last active conversation
+    async fn last_conversation(&self) -> anyhow::Result<Option<Conversation>>;
 }
 
 #[async_trait::async_trait]
@@ -432,15 +440,23 @@ impl<I: Services> ConversationService for I {
             .await
     }
 
-    async fn init_conversation(&self) -> anyhow::Result<Conversation> {
-        self.conversation_service().init_conversation().await
-    }
-
     async fn modify_conversation<F, T>(&self, id: &ConversationId, f: F) -> anyhow::Result<T>
     where
         F: FnOnce(&mut Conversation) -> T + Send,
+        T: Send,
     {
         self.conversation_service().modify_conversation(id, f).await
+    }
+
+    async fn get_conversations(
+        &self,
+        limit: Option<usize>,
+    ) -> anyhow::Result<Option<Vec<Conversation>>> {
+        self.conversation_service().get_conversations(limit).await
+    }
+
+    async fn last_conversation(&self) -> anyhow::Result<Option<Conversation>> {
+        self.conversation_service().last_conversation().await
     }
 }
 #[async_trait::async_trait]

@@ -11,9 +11,7 @@ use forge_api::{
     ToolName, Workflow,
 };
 use forge_display::MarkdownWriter;
-use forge_domain::{
-    ChatResponseContent, McpConfig, McpServerConfig, Metrics, Provider, Scope, TitleFormat,
-};
+use forge_domain::{ChatResponseContent, McpConfig, McpServerConfig, Provider, Scope, TitleFormat};
 use forge_fs::ForgeFS;
 use forge_spinner::{ForgeSpinner, SpinnerManager, StdoutWriter};
 use forge_tracker::ToolCallPayload;
@@ -25,6 +23,7 @@ use termimad::{CompoundStyle, LineStyle, MadSkin};
 use tokio_stream::StreamExt;
 
 use crate::cli::{Cli, McpCommand, TopLevelCommand, Transport};
+use crate::conversation_selector::ConversationSelector;
 use crate::info::{Info, get_usage};
 use crate::input::Console;
 use crate::model::{Command, ForgeCommandManager};
@@ -33,6 +32,9 @@ use crate::state::UIState;
 use crate::title_display::TitleDisplayExt;
 use crate::update::on_update;
 use crate::{TRACKER, banner, tracker};
+
+// Configuration constants
+const MAX_CONVERSATIONS_TO_SHOW: usize = 20;
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq, Default)]
 pub struct PartialEvent {
@@ -85,12 +87,24 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
         Ok(models)
     }
 
+    /// Displays banner only if user is in interactive mode.
+    fn display_banner(&self) -> Result<()> {
+        if self.cli.is_interactive() {
+            banner::display()?;
+        }
+        Ok(())
+    }
+
     // Handle creating a new conversation
     async fn on_new(&mut self) -> Result<()> {
         self.api = Arc::new((self.new_api)());
         self.init_state(false).await?;
+
+        // Reset previously set CLI parameters by the user
         self.cli.conversation = None;
-        banner::display()?;
+        self.cli.resume = None;
+
+        self.display_banner()?;
         self.trace_user();
         self.hydrate_caches();
         Ok(())
@@ -186,7 +200,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             Ok(_) => {}
             Err(error) => {
                 tracing::error!(error = ?error);
-                eprintln!("{}", TitleFormat::error(format!("{error:?}")).display());
+                let _ = self.writeln_title(TitleFormat::error(format!("{error:?}")));
             }
         }
     }
@@ -196,6 +210,17 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             return self.handle_subcommands(mcp).await;
         }
 
+        // Handle --generate-conversation-id flag
+        if self.cli.generate_conversation_id {
+            return self.handle_generate_conversation_id().await;
+        }
+
+        // // Display the banner in dimmed colors since we're in interactive mode
+        self.display_banner()?;
+        self.init_state(true).await?;
+        self.trace_user();
+        self.hydrate_caches();
+
         // Check for dispatch flag first
         if let Some(dispatch_json) = self.cli.event.clone() {
             return self.handle_dispatch(dispatch_json).await;
@@ -204,51 +229,52 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
         // Handle direct prompt if provided
         let prompt = self.cli.prompt.clone();
         if let Some(prompt) = prompt {
+            self.spinner.start(None)?;
             self.on_message(Some(prompt)).await?;
             return Ok(());
         }
 
-        // Display the banner in dimmed colors since we're in interactive mode
-        banner::display()?;
-
-        self.init_state(true).await?;
-        self.trace_user();
-
-        // Hydrate the models cache
-        self.hydrate_caches();
-
         // Get initial input from file or prompt
         let mut command = match &self.cli.command {
-            Some(path) => self.console.upload(path).await?,
-            None => self.prompt().await?,
+            Some(path) => self.console.upload(path).await,
+            None => self.prompt().await,
         };
 
         loop {
-            tokio::select! {
-                _ = tokio::signal::ctrl_c() => {
-                    tracing::info!("User interrupted operation with Ctrl+C");
-                }
-                result = self.on_command(command) => {
-                    match result {
-                        Ok(exit) => if exit {return Ok(())},
-                        Err(error) => {
-                            if let Some(conversation_id) = self.state.conversation_id.as_ref()
-                                && let Some(conversation) = self.api.conversation(conversation_id).await.ok().flatten() {
-                                    TRACKER.set_conversation(conversation).await;
-                                }
-                            tracker::error(&error);
-                            tracing::error!(error = ?error);
-                            self.spinner.stop(None)?;
-                            eprintln!("{}", TitleFormat::error(format!("{error:?}")).display());
-                        },
+            match command {
+                Ok(command) => {
+                    tokio::select! {
+                        _ = tokio::signal::ctrl_c() => {
+                            tracing::info!("User interrupted operation with Ctrl+C");
+                        }
+                        result = self.on_command(command) => {
+                            match result {
+                                Ok(exit) => if exit {return Ok(())},
+                                Err(error) => {
+                                    if let Some(conversation_id) = self.state.conversation_id.as_ref()
+                                        && let Some(conversation) = self.api.conversation(conversation_id).await.ok().flatten() {
+                                            TRACKER.set_conversation(conversation).await;
+                                        }
+                                    tracker::error(&error);
+                                    tracing::error!(error = ?error);
+                                    self.spinner.stop(None)?;
+                                    self.writeln_title(TitleFormat::error(format!("{error:?}")))?;
+                                },
+                            }
+                        }
                     }
+
+                    self.spinner.stop(None)?;
+                }
+                Err(error) => {
+                    tracker::error(&error);
+                    tracing::error!(error = ?error);
+                    self.spinner.stop(None)?;
+                    self.writeln_title(TitleFormat::error(format!("{error:?}")))?;
                 }
             }
-
-            self.spinner.stop(None)?;
-
             // Centralized prompt call at the end of the loop
-            command = self.prompt().await?;
+            command = self.prompt().await;
         }
     }
 
@@ -260,6 +286,12 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
         tokio::spawn(async move { api.tools().await });
         let api = self.api.clone();
         tokio::spawn(async move { api.get_agents().await });
+    }
+
+    async fn handle_generate_conversation_id(&mut self) -> Result<()> {
+        let conversation_id = forge_domain::ConversationId::generate();
+        println!("{}", conversation_id.into_string());
+        Ok(())
     }
 
     async fn handle_subcommands(&mut self, subcommand: TopLevelCommand) -> anyhow::Result<()> {
@@ -344,29 +376,62 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 self.on_info().await?;
                 return Ok(());
             }
+            TopLevelCommand::Term(terminal_args) => {
+                self.on_terminal(terminal_args).await?;
+                return Ok(());
+            }
         }
         Ok(())
     }
 
     async fn on_info(&mut self) -> anyhow::Result<()> {
         self.spinner.start(Some("Loading Info"))?;
-        let mut info = Info::from(&self.state).extend(Info::from(&self.api.environment()));
+        let mut info = Info::from(&self.api.environment()).extend(Info::from(&self.state));
+
+        // Execute async operations in parallel
+        let conversation_future = async {
+            if let Some(conversation_id) = &self.state.conversation_id {
+                self.api.conversation(conversation_id).await.ok().flatten()
+            } else {
+                None
+            }
+        };
+
+        let config_future = self.api.app_config();
+        let usage_future = self.api.user_usage();
+
+        let (conversation_result, config_result, usage_result) =
+            tokio::join!(conversation_future, config_future, usage_future);
+
+        // Add conversation information if available
+        if let Some(conversation) = conversation_result {
+            info = info.extend(Info::from(&conversation));
+        }
 
         // Add user information if available
-        if let Some(config) = self.api.app_config().await
+        if let Some(config) = config_result
             && let Some(login_info) = &config.key_info
         {
             info = info.extend(Info::from(login_info));
         }
 
         // Add usage information
-        if let Ok(Some(user_usage)) = self.api.user_usage().await {
+        if let Ok(Some(user_usage)) = usage_result {
             info = info.extend(Info::from(&user_usage));
         }
 
         self.writeln(info)?;
         self.spinner.stop(None)?;
 
+        Ok(())
+    }
+
+    async fn on_terminal(&mut self, terminal_args: crate::cli::TerminalArgs) -> anyhow::Result<()> {
+        match terminal_args.generate_prompt {
+            crate::cli::ShellType::Zsh => {
+                println!("{}", include_str!("../../../shell-plugin/forge.plugin.zsh"))
+            }
+        }
         Ok(())
     }
 
@@ -381,8 +446,36 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             .collect::<Vec<_>>())
     }
 
+    async fn list_conversations(&mut self) -> anyhow::Result<()> {
+        self.spinner.start(Some("Loading Conversations"))?;
+        let conversations = self
+            .api
+            .list_conversations(Some(MAX_CONVERSATIONS_TO_SHOW))
+            .await?;
+        self.spinner.stop(None)?;
+
+        if conversations.is_empty() {
+            self.writeln_title(TitleFormat::error(
+                "No conversations found in this workspace.",
+            ))?;
+            return Ok(());
+        }
+
+        if let Some(conversation) = ConversationSelector::select_conversation(&conversations)? {
+            self.state.conversation_id = Some(conversation.id);
+            self.state.usage = conversation
+                .context
+                .and_then(|ctx| ctx.usage)
+                .unwrap_or(self.state.usage.clone());
+        }
+        Ok(())
+    }
+
     async fn on_command(&mut self, command: Command) -> anyhow::Result<bool> {
         match command {
+            Command::Conversations => {
+                self.list_conversations().await?;
+            }
             Command::Compact => {
                 self.spinner.start(Some("Compacting"))?;
                 self.on_compaction().await?;
@@ -512,6 +605,20 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 self.spinner.start(None)?;
                 self.on_message(None).await?;
             }
+            Command::AgentSwitch(agent_id) => {
+                // Validate that the agent exists by checking against loaded agents
+                let agents = self.api.get_agents().await?;
+                let agent_exists = agents.iter().any(|agent| agent.id.as_str() == agent_id);
+
+                if agent_exists {
+                    self.on_agent_change(AgentId::new(agent_id)).await?;
+                } else {
+                    return Err(anyhow::anyhow!(
+                        "Agent '{}' not found or unavailable",
+                        agent_id
+                    ));
+                }
+            }
         }
 
         Ok(false)
@@ -605,6 +712,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
         match self.state.conversation_id {
             Some(ref id) => Ok(*id),
             None => {
+                let mut new_conversation = false;
                 self.spinner.start(Some("Initializing"))?;
 
                 // Select a model if workflow doesn't have one
@@ -614,24 +722,45 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 self.update_model(workflow.model.clone());
 
                 // We need to try and get the conversation ID first before fetching the model
-                let id = if let Some(ref path) = self.cli.conversation {
+                let conversation = if let Some(ref path) = self.cli.conversation {
                     let conversation: Conversation =
                         serde_json::from_str(ForgeFS::read_utf8(path.as_os_str()).await?.as_str())
                             .context("Failed to parse Conversation")?;
-
-                    let conversation_id = conversation.id;
-                    self.state.conversation_id = Some(conversation_id);
-
-                    self.api.upsert_conversation(conversation).await?;
-                    conversation_id
+                    conversation
+                } else if let Some(conversation_id) = self.cli.resume {
+                    // Use the explicitly provided conversation ID
+                    // Check if conversation with this ID already exists
+                    if let Some(conversation) = self.api.conversation(&conversation_id).await? {
+                        conversation
+                    } else {
+                        // Conversation doesn't exist, create a new one with this ID
+                        new_conversation = true;
+                        Conversation::new(conversation_id)
+                    }
                 } else {
-                    let conversation = self.api.init_conversation().await?;
-                    self.state.conversation_id = Some(conversation.id);
-
-                    conversation.id
+                    new_conversation = true;
+                    Conversation::generate()
                 };
 
-                Ok(id)
+                self.api.upsert_conversation(conversation.clone()).await?;
+                self.state.conversation_id = Some(conversation.id);
+                self.state.usage = conversation
+                    .context
+                    .and_then(|ctx| ctx.usage)
+                    .unwrap_or(self.state.usage.clone());
+
+                if new_conversation {
+                    self.writeln_title(
+                        TitleFormat::info("Initialized conversation")
+                            .sub_title(conversation.id.into_string()),
+                    )?;
+                } else {
+                    self.writeln_title(
+                        TitleFormat::info("Resumed conversation")
+                            .sub_title(conversation.id.into_string()),
+                    )?;
+                }
+                Ok(conversation.id)
             }
         }
     }
@@ -658,6 +787,28 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             .await?;
 
         self.command.register_all(&base_workflow);
+
+        // Register agent commands
+        match self.api.get_agents().await {
+            Ok(agents) => {
+                let result = self.command.register_agent_commands(agents);
+
+                // Show warning for any skipped agents due to conflicts
+                for skipped_command in result.skipped_conflicts {
+                    self.writeln_title(TitleFormat::error(format!(
+                        "Skipped agent command '{}' due to name conflict with built-in command",
+                        skipped_command
+                    )))?;
+                }
+            }
+            Err(e) => {
+                self.writeln_title(TitleFormat::error(format!(
+                    "Failed to load agents for command registration: {}",
+                    e
+                )))?;
+            }
+        }
+
         let agent = self.api.get_operating_agent().await.unwrap_or_default();
         self.state = UIState::new(self.api.environment(), base_workflow, agent).provider(provider);
 
@@ -755,7 +906,9 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                                 .sub_title(path.to_string()),
                         )?;
 
-                        open::that(path.as_str()).ok();
+                        if self.api.environment().auto_open_dump {
+                            open::that(path.as_str()).ok();
+                        }
 
                         return Ok(());
                     }
@@ -770,7 +923,9 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                             .sub_title(path.to_string()),
                     )?;
 
-                    open::that(path.as_str()).ok();
+                    if self.api.environment().auto_open_dump {
+                        open::that(path.as_str()).ok();
+                    }
                 };
             } else {
                 return Err(anyhow::anyhow!("Could not create dump"))
@@ -836,7 +991,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                     InterruptionReason::MaxRequestPerTurnLimitReached { limit } => {
                         format!("Maximum request ({limit}) per turn achieved")
                     }
-                    InterruptionReason::MaxToolFailurePerTurnLimitReached { limit } => {
+                    InterruptionReason::MaxToolFailurePerTurnLimitReached { limit, .. } => {
                         format!("Maximum tool failure limit ({limit}) reached for this turn")
                     }
                 };
@@ -853,7 +1008,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 }
                 if let Some(conversation_id) = self.state.conversation_id.as_ref() {
                     let conversation = self.api.conversation(conversation_id).await?;
-                    self.on_completion(conversation.unwrap().metrics).await?;
+                    self.on_completion(conversation.unwrap()).await?;
                 }
             }
         }
@@ -873,38 +1028,37 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
         Ok(())
     }
 
-    async fn on_completion(&mut self, metrics: Metrics) -> anyhow::Result<()> {
+    async fn on_completion(&mut self, conversation: Conversation) -> anyhow::Result<()> {
         self.spinner.start(Some("Loading Summary"))?;
 
-        let mut info = Info::default();
+        let info = Info::default()
+            .extend(Info::from(&conversation))
+            .extend(get_usage(&self.state));
 
-        // Show summary
-        info = info.extend(Info::from(&metrics));
-
-        // Fetch Usage
-        info = info.extend(get_usage(&self.state));
-
-        if let Ok(Some(usage)) = self.api.user_usage().await {
-            info = info.extend(Info::from(&usage));
-        }
+        // if let Ok(Some(usage)) = self.api.user_usage().await {
+        //     info = info.extend(Info::from(&usage));
+        // }
 
         self.writeln(info)?;
 
         self.spinner.stop(None)?;
 
-        let prompt_text = "Start a new conversation?";
-        let should_start_new_chat = ForgeSelect::confirm(prompt_text)
-            // Pressing ENTER should start new
-            .with_default(true)
-            .with_help_message("ESC = No, continue current conversation")
-            .prompt()
-            // Cancel or failure should continue with the session
-            .unwrap_or(Some(false))
-            .unwrap_or(false);
+        // Only prompt for new conversation if in interactive mode
+        if self.cli.is_interactive() {
+            let prompt_text = "Start a new conversation?";
+            let should_start_new_chat = ForgeSelect::confirm(prompt_text)
+                // Pressing ENTER should start new
+                .with_default(true)
+                .with_help_message("ESC = No, continue current conversation")
+                .prompt()
+                // Cancel or failure should continue with the session
+                .unwrap_or(Some(false))
+                .unwrap_or(false);
 
-        // if conversation is over
-        if should_start_new_chat {
-            self.on_new().await?;
+            // if conversation is over
+            if should_start_new_chat {
+                self.on_new().await?;
+            }
         }
 
         Ok(())
