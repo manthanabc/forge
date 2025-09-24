@@ -8,6 +8,12 @@ use syntect::util::{LinesWithEndings, as_24_bit_terminal_escaped};
 use termimad::crossterm::style::{Attribute, Color};
 use termimad::{CompoundStyle, LineStyle, MadSkin};
 
+#[derive(Debug)]
+pub enum Segment {
+    Text(String),
+    Code(String),
+}
+
 /// MarkdownFormat provides functionality for formatting markdown text for
 /// terminal display.
 #[derive(Clone, Setters, Default)]
@@ -15,6 +21,7 @@ use termimad::{CompoundStyle, LineStyle, MadSkin};
 pub struct MarkdownFormat {
     skin: MadSkin,
     max_consecutive_newlines: usize,
+    width: usize,
 }
 
 impl MarkdownFormat {
@@ -31,7 +38,7 @@ impl MarkdownFormat {
         strikethrough_style.add_attr(Attribute::Dim);
         skin.strikeout = strikethrough_style;
 
-        Self { skin, max_consecutive_newlines: 2 }
+        Self { skin, max_consecutive_newlines: 2, width: 80 }
     }
 
     /// Render the markdown content to a string formatted for terminal display.
@@ -66,7 +73,7 @@ impl MarkdownFormat {
 
     /// Creates a streaming markdown processor.
     pub fn writer(&self) -> MarkdownWriter {
-        MarkdownWriter::new(self.skin.clone())
+        MarkdownWriter::new(self.skin.clone(), self.width)
     }
 }
 
@@ -76,60 +83,84 @@ pub struct MarkdownWriter {
     skin: MadSkin,
     ss: SyntaxSet,
     theme: syntect::highlighting::Theme,
+    previous_rendered: String,
+    width: usize,
 }
 
 impl MarkdownWriter {
     /// Creates a new streaming markdown writer.
-    pub fn new(skin: MadSkin) -> Self {
+    pub fn new(skin: MadSkin, width: usize) -> Self {
         let ss = SyntaxSet::load_defaults_newlines();
         let ts = ThemeSet::load_defaults();
         let theme = ts.themes["Solarized (dark)"].clone();
-        Self { buffer: String::new(), skin, ss, theme }
+        Self {
+            buffer: String::new(),
+            skin,
+            ss,
+            theme,
+            previous_rendered: String::new(),
+            width,
+        }
     }
 
-    /// Processes a chunk of markdown, returning rendered content if available.
-    pub fn add_chunk(&mut self, chunk: &str) -> std::io::Result<Option<String>> {
-        self.buffer.push_str(chunk);
-        self.try_render()
+    /// Adds a single character and renders immediately.
+    pub fn add_char(&mut self, c: char) -> std::io::Result<()> {
+        self.buffer.push(c);
+        if let Some(rendered) = self.try_render()? {
+            self.stream_rendered(&rendered);
+        }
+        Ok(())
     }
 
     fn try_render(&mut self) -> std::io::Result<Option<String>> {
-        if let Some(pos) = Self::find_last_safe_split(&self.buffer) {
-            let complete = &self.buffer[0..pos];
-            let processed = self.process_code_blocks(complete);
-            let rendered = self.skin.text(&processed, None);
-            // print!("{}",&rendered.to_string());
-            let result = rendered.to_string();
-            self.buffer = self.buffer[pos..].to_string();
+        let segments = self.render_markdown(&self.buffer);
+        let mut result = String::new();
+        for segment in segments {
+            match segment {
+                Segment::Text(text) => {
+                    let rendered = self.skin.text(&text, Some(self.width));
+                    result.push_str(&rendered.to_string());
+                }
+                Segment::Code(code) => {
+                    result.push_str(&code);
+                }
+            }
+        }
+        Ok(Some(result))
+    }
+
+    /// Renders and returns any remaining content from the buffer.
+    pub fn flush(&mut self) -> std::io::Result<Option<String>> {
+        if !self.buffer.is_empty() {
+            let segments = self.render_markdown(&self.buffer);
+            let mut result = String::new();
+            for segment in segments {
+                match segment {
+                    Segment::Text(text) => {
+                        let rendered = self.skin.text(&text, Some(self.width));
+                        result.push_str(&rendered.to_string());
+                    }
+                    Segment::Code(code) => {
+                        result.push_str(&code);
+                    }
+                }
+            }
+            self.buffer.clear();
             Ok(Some(result))
         } else {
             Ok(None)
         }
     }
 
-    fn find_last_safe_split(buffer: &str) -> Option<usize> {
-        let mut last_safe = None;
-        let mut in_code_block = false;
-        let bytes = buffer.as_bytes();
-        let mut i = 0;
-        while i < bytes.len() {
-            if i + 2 < bytes.len() && &bytes[i..i + 3] == b"```" {
-                in_code_block = !in_code_block;
-                i += 3;
-                continue;
-            }
-            if !in_code_block && i + 1 < bytes.len() && bytes[i] == b'\n' && bytes[i + 1] == b'\n' {
-                last_safe = Some(i + 2);
-            }
-            i += 1;
-        }
-        last_safe
-    }
-
-    fn process_code_blocks(&self, text: &str) -> String {
+    fn render_markdown(&self, text: &str) -> Vec<Segment> {
         let re = regex!(r"(?s)```(\w+)?\n(.*?)(```|\z)");
-        let mut result = text.to_string();
+        let mut segments = vec![];
+        let mut last_end = 0;
         for cap in re.captures_iter(text) {
+            let start = cap.get(0).unwrap().start();
+            if start > last_end {
+                segments.push(Segment::Text(text[last_end..start].to_string()));
+            }
             let lang = cap.get(1).map(|m| m.as_str()).unwrap_or("txt");
             let ext = match lang {
                 "rust" => "rs",
@@ -138,35 +169,69 @@ impl MarkdownWriter {
                 _ => lang,
             };
             let code = cap.get(2).unwrap().as_str();
+            let wrapped_code = Self::wrap_code(code, self.width);
             let syntax = self
                 .ss
                 .find_syntax_by_extension(ext)
                 .unwrap_or_else(|| self.ss.find_syntax_plain_text());
             let mut h = HighlightLines::new(syntax, &self.theme);
             let mut highlighted = String::new();
-            for line in LinesWithEndings::from(code) {
+            for line in LinesWithEndings::from(&wrapped_code) {
                 let ranges: Vec<(syntect::highlighting::Style, &str)> =
                     h.highlight_line(line, &self.ss).unwrap();
                 highlighted.push_str(&as_24_bit_terminal_escaped(&ranges[..], false));
             }
             highlighted.push_str("\x1b[0m");
-            let full_match = cap.get(0).unwrap().as_str();
-            result = result.replace(full_match, &highlighted);
+            segments.push(Segment::Code(highlighted));
+            last_end = cap.get(0).unwrap().end();
+        }
+        if last_end < text.len() {
+            segments.push(Segment::Text(text[last_end..].to_string()));
+        }
+        segments
+    }
+
+    fn wrap_code(code: &str, width: usize) -> String {
+        let mut result = String::new();
+        for line in code.lines() {
+            if line.len() <= width {
+                result.push_str(line);
+                result.push('\n');
+            } else {
+                // Simple wrap at width, but since it's code, just split
+                let mut start = 0;
+                while start < line.len() {
+                    let end = (start + width).min(line.len());
+                    result.push_str(&line[start..end]);
+                    result.push('\n');
+                    start = end;
+                }
+            }
         }
         result
     }
 
-    /// Renders and returns any remaining content from the buffer.
-    pub fn flush(&mut self) -> std::io::Result<Option<String>> {
-        if !self.buffer.is_empty() {
-            let processed = self.process_code_blocks(&self.buffer);
-            let rendered = self.skin.text(&processed, None);
-            let result = rendered.to_string();
-            self.buffer.clear();
-            Ok(Some(result))
-        } else {
-            Ok(None)
+    /// Streams the rendered content with ANSI clearing like markdown_renderer.
+    pub fn stream_rendered(&mut self, content: &str) {
+        let rendered_lines: Vec<&str> = content.lines().collect();
+        let lines_new: Vec<&str> = rendered_lines;
+        let lines_prev: Vec<&str> = self.previous_rendered.lines().collect();
+        let common = lines_prev
+            .iter()
+            .zip(&lines_new)
+            .take_while(|(p, n)| p == n)
+            .count();
+        if common < lines_prev.len() {
+            let up_lines = lines_prev.len() - common;
+            if up_lines > 0 {
+                print!("\x1b[{}A", up_lines);
+            }
+            print!("\x1b[0J");
         }
+        for line in &lines_new[common..] {
+            println!("{}", line);
+        }
+        self.previous_rendered = content.to_string();
     }
 }
 

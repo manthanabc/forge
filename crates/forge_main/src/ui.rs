@@ -10,7 +10,7 @@ use forge_api::{
     EVENT_USER_TASK_INIT, EVENT_USER_TASK_UPDATE, Event, InterruptionReason, Model, ModelId,
     ToolName, Workflow,
 };
-use forge_display::MarkdownWriter;
+use forge_display::{MarkdownFormat, MarkdownWriter};
 use forge_domain::{ChatResponseContent, McpConfig, McpServerConfig, Provider, Scope, TitleFormat};
 use forge_fs::ForgeFS;
 use forge_spinner::{ForgeSpinner, SpinnerManager, StdoutWriter};
@@ -19,6 +19,7 @@ use merge::Merge;
 use serde::Deserialize;
 use serde_json::Value;
 use termimad::crossterm::style::{Attribute, Color};
+use termimad::crossterm::terminal;
 use termimad::{CompoundStyle, LineStyle, MadSkin};
 use tokio_stream::StreamExt;
 
@@ -173,19 +174,8 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             command,
             spinner: SpinnerManager::new(StdoutWriter, ForgeSpinner::new()),
             markdown: {
-                let mut skin = MadSkin::default();
-                let compound_style =
-                    CompoundStyle::new(Some(Color::Cyan), None, Attribute::Bold.into());
-                skin.inline_code = compound_style.clone();
-
-                let codeblock_style = CompoundStyle::new(None, None, Default::default());
-                skin.code_block = LineStyle::new(codeblock_style, Default::default());
-
-                let mut strikethrough_style = CompoundStyle::with_attr(Attribute::CrossedOut);
-                strikethrough_style.add_attr(Attribute::Dim);
-                skin.strikeout = strikethrough_style;
-
-                MarkdownWriter::new(skin)
+                let (width, _) = terminal::size().unwrap_or((80, 24));
+                MarkdownFormat::new().width(width as usize).writer()
             },
             _guard: forge_tracker::init_tracing(env.log_path(), TRACKER.clone())?,
         })
@@ -896,9 +886,6 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 }
             }
         }
-        if let Some(remaining) = self.markdown.flush()? {
-            self.spinner.write(&remaining)?;
-        }
 
         self.spinner.stop(None)?;
 
@@ -962,8 +949,9 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 ChatResponseContent::PlainText(text) => self.writeln(text)?,
                 ChatResponseContent::Markdown(text) => {
                     tracing::info!(message = %text, "Agent Response");
-                    if let Some(rendered) = self.markdown.add_chunk(&text)? {
-                        self.spinner.write(&rendered)?;
+                    for c in text.chars() {
+                        self.markdown.add_char(c)?;
+                        std::thread::sleep(std::time::Duration::from_millis(1));
                     }
                 }
             },
@@ -1000,9 +988,6 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             }
             ChatResponse::Interrupt { reason } => {
                 self.spinner.stop(None)?;
-                if let Some(remaining) = self.markdown.flush()? {
-                    self.spinner.write(&remaining)?;
-                }
 
                 let title = match reason {
                     InterruptionReason::MaxRequestPerTurnLimitReached { limit } => {
@@ -1020,9 +1005,6 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 self.spinner.write(content.dimmed().to_string())?;
             }
             ChatResponse::TaskComplete => {
-                if let Some(remaining) = self.markdown.flush()? {
-                    self.spinner.write(&remaining)?;
-                }
                 if let Some(conversation_id) = self.state.conversation_id.as_ref() {
                     let conversation = self.api.conversation(conversation_id).await?;
                     self.on_completion(conversation.unwrap()).await?;
