@@ -18,9 +18,7 @@ use forge_tracker::ToolCallPayload;
 use merge::Merge;
 use serde::Deserialize;
 use serde_json::Value;
-use termimad::crossterm::style::{Attribute, Color};
 use termimad::crossterm::terminal;
-use termimad::{CompoundStyle, LineStyle, MadSkin};
 use tokio_stream::StreamExt;
 
 use crate::cli::{Cli, McpCommand, TopLevelCommand, Transport};

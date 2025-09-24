@@ -103,6 +103,14 @@ impl MarkdownWriter {
         }
     }
 
+    /// Adds a chunk of text by adding each character.
+    pub fn add_chunk(&mut self, chunk: &str) -> std::io::Result<Option<String>> {
+        for c in chunk.chars() {
+            self.add_char(c)?;
+        }
+        self.try_render()
+    }
+
     /// Adds a single character and renders immediately.
     pub fn add_char(&mut self, c: char) -> std::io::Result<()> {
         self.buffer.push(c);
@@ -320,7 +328,7 @@ mod tests {
     #[test]
     fn test_markdown_writer() {
         let fixture = "# Test Heading\n\nThis is a paragraph.";
-        let mut writer = MarkdownWriter::new(MadSkin::default());
+        let mut writer = MarkdownWriter::new(MadSkin::default(), 80);
 
         let result = writer.add_chunk(fixture);
         assert!(result.is_ok());
@@ -347,7 +355,7 @@ mod tests {
     #[test]
     fn test_markdown_writer_code_block() {
         let fixture = "```rust\nfn main() {\n    println!(\"Hello\");\n}\n```";
-        let mut writer = MarkdownWriter::new(MadSkin::default());
+        let mut writer = MarkdownWriter::new(MadSkin::default(), 80);
 
         let result = writer.add_chunk(fixture);
         assert!(result.is_ok());
