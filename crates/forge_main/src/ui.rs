@@ -875,17 +875,17 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
     async fn on_chat(&mut self, chat: ChatRequest) -> Result<()> {
         let mut stream = self.api.chat(chat).await?;
 
+        // Stop spinner during streaming to avoid interference
+        self.spinner.stop(None)?;
+
         while let Some(message) = stream.next().await {
             match message {
                 Ok(message) => self.handle_chat_response(message).await?,
                 Err(err) => {
-                    self.spinner.stop(None)?;
                     return Err(err);
                 }
             }
         }
-
-        self.spinner.stop(None)?;
 
         Ok(())
     }

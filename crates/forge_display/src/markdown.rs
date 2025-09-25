@@ -237,7 +237,7 @@ impl MarkdownWriter {
             print!("\x1b[0J");
         }
         for line in &lines_new[common..] {
-            println!("{}", line);
+            println!("{}\x1b[K", line);
         }
         self.previous_rendered = content.to_string();
     }
