@@ -2,19 +2,20 @@ mod console_writer;
 mod spinner;
 
 use anyhow::Result;
+use std::sync::{Arc, Mutex};
 pub use console_writer::*;
 pub use spinner::*;
 
 /// Manages spinner functionality for the UI
 pub struct SpinnerManager<W: Writer, S: Spinner> {
     spinner: S,
-    writer: WriterWrapper<W>,
+    writer: Arc<Mutex<WriterWrapper<W>>>,
     message: Option<String>,
 }
 
 impl<W: Writer, S: Spinner> SpinnerManager<W, S> {
-    pub fn new(writer: W, spinner: S) -> Self {
-        Self { spinner, writer: WriterWrapper::new(writer), message: None }
+    pub fn new(writer: Arc<Mutex<WriterWrapper<W>>>, spinner: S) -> Self {
+        Self { spinner, writer, message: None }
     }
 
     // Starts the spinner
@@ -31,15 +32,12 @@ impl<W: Writer, S: Spinner> SpinnerManager<W, S> {
     }
 
     /// Stop the active spinner if any and prints the provided content.
-    fn stop_internal(&mut self, message: Option<String>, new_line: bool) -> Result<()> {
+    fn stop_internal(&mut self, message: Option<String>, _new_line: bool) -> Result<()> {
         self.spinner.stop()?;
         // Then print the message if provided
         if let Some(msg) = message {
-            if new_line {
-                self.writer.writeln(&msg)?;
-            } else {
-                self.writer.write(&msg)?;
-            }
+            let mut w = self.writer.lock().unwrap();
+            w.writeln(&msg)?;
         }
         self.message = None;
         Ok(())
@@ -49,9 +47,19 @@ impl<W: Writer, S: Spinner> SpinnerManager<W, S> {
     pub fn write_ln(&mut self, message: impl ToString) -> Result<()> {
         let is_running = self.spinner.is_running();
         let prev_message = self.message.clone();
-        self.stop(Some(message.to_string()))?;
+
         if is_running {
-            self.start(prev_message.as_deref())?;
+            self.stop_internal(None, false)?;
+        }
+
+        {
+            let mut w = self.writer.lock().unwrap();
+            w.writeln(&message.to_string())?;
+        }
+        self.message = Some(format!("{}\n", message.to_string()));
+
+        if is_running {
+            self.spinner.start(prev_message.as_deref())?;
         }
 
         Ok(())
@@ -61,11 +69,26 @@ impl<W: Writer, S: Spinner> SpinnerManager<W, S> {
     pub fn write(&mut self, message: impl ToString) -> Result<()> {
         let is_running = self.spinner.is_running();
         let prev_message = self.message.clone();
-        self.stop_internal(Some(message.to_string()), false)?;
+
         if is_running {
-            self.message = prev_message;
+            self.stop_internal(None, false)?;
         }
+
+        {
+            let mut w = self.writer.lock().unwrap();
+            w.write(&message.to_string())?;
+        }
+        self.message = Some(message.to_string());
+
+        if is_running {
+            self.spinner.start(prev_message.as_deref())?;
+        }
+
         Ok(())
+    }
+
+    pub fn writer(&self) -> Arc<Mutex<WriterWrapper<W>>> {
+        self.writer.clone()
     }
 }
 
@@ -79,7 +102,7 @@ mod tests {
 
     impl Default for SpinnerManager<WriterWrapper<TestWriter>, TestSpinner> {
         fn default() -> Self {
-            let fixture_writer = WriterWrapper::new(TestWriter::default());
+            let fixture_writer = Arc::new(Mutex::new(WriterWrapper::new(TestWriter::default())));
             let fixture_spinner = TestSpinner::default();
             SpinnerManager::new(fixture_writer, fixture_spinner)
         }
@@ -142,7 +165,7 @@ mod tests {
             Some("test message".to_string())
         );
         // writer shouldn't write anything.
-        assert!(fixture.writer.message().is_none())
+        assert!(fixture.writer.lock().unwrap().message().is_none())
     }
 
     #[test]
@@ -156,7 +179,7 @@ mod tests {
         assert_eq!(fixture.message, None);
         assert_eq!(fixture.spinner.started_message, None);
         // writer shouldn't write anything.
-        assert!(fixture.writer.message().is_none())
+        assert!(fixture.writer.lock().unwrap().message().is_none())
     }
 
     #[test]
@@ -172,7 +195,7 @@ mod tests {
         assert_eq!(fixture.message, None);
 
         // writer should add new line.
-        assert_eq!(fixture.writer.message(), Some(&"completed\n".to_string()))
+        assert_eq!(fixture.writer.lock().unwrap().message(), Some(&"completed\n".to_string()))
     }
 
     #[test]
@@ -202,7 +225,7 @@ mod tests {
         assert_eq!(fixture.spinner.is_running(), true);
         assert_eq!(fixture.message, Some("processing".to_string()));
         assert_eq!(
-            fixture.writer.message(),
+            fixture.writer.lock().unwrap().message(),
             Some(&"output message\n".to_string())
         );
     }
@@ -218,7 +241,7 @@ mod tests {
         assert_eq!(fixture.spinner.is_running(), false);
         assert_eq!(fixture.message, Some("processing".to_string()));
         assert_eq!(
-            fixture.writer.message(),
+            fixture.writer.lock().unwrap().message(),
             Some(&"output message".to_string())
         );
     }

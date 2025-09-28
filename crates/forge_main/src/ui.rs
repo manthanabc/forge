@@ -10,10 +10,12 @@ use forge_api::{
     EVENT_USER_TASK_INIT, EVENT_USER_TASK_UPDATE, Event, InterruptionReason, Model, ModelId,
     ToolName, Workflow,
 };
-use forge_display::{MarkdownFormat, MarkdownWriter};
-use forge_domain::{ChatResponseContent, McpConfig, McpServerConfig, Provider, Scope, TitleFormat};
+use forge_display::{MarkdownRenderer, MarkdownWriter};
 use forge_fs::ForgeFS;
-use forge_spinner::{ForgeSpinner, SpinnerManager, StdoutWriter};
+use forge_spinner::{ArcWriter, ForgeSpinner, SpinnerManager, StdoutWriter, WriterWrapper};
+use termimad::crossterm::style::{Attribute, Color};
+use termimad::{CompoundStyle, LineStyle, MadSkin};
+use forge_domain::{ChatResponseContent, McpConfig, McpServerConfig, Provider, Scope, TitleFormat};
 use forge_tracker::ToolCallPayload;
 use merge::Merge;
 use serde::Deserialize;
@@ -54,7 +56,7 @@ impl From<PartialEvent> for Event {
 }
 
 pub struct UI<A, F: Fn() -> A> {
-    markdown: MarkdownWriter,
+    markdown: MarkdownWriter<ArcWriter<WriterWrapper<StdoutWriter>>>,
     state: UIState,
     api: Arc<F::Output>,
     new_api: Arc<F>,
@@ -163,6 +165,25 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
         let api = Arc::new(f());
         let env = api.environment();
         let command = Arc::new(ForgeCommandManager::default());
+        let writer = Arc::new(std::sync::Mutex::new(WriterWrapper::new(StdoutWriter)));
+        let spinner = SpinnerManager::new(writer.clone(), ForgeSpinner::new());
+        let writer = spinner.writer();
+        let markdown = {
+            let (width, _) = terminal::size().unwrap_or((80, 24));
+            let mut skin = MadSkin::default();
+            let compound_style = CompoundStyle::new(Some(Color::Cyan), None, Attribute::Bold.into());
+            skin.inline_code = compound_style.clone();
+
+            let codeblock_style = CompoundStyle::new(None, None, Default::default());
+            skin.code_block = LineStyle::new(codeblock_style, Default::default());
+
+            let mut strikethrough_style = CompoundStyle::with_attr(Attribute::CrossedOut);
+            strikethrough_style.add_attr(Attribute::Dim);
+            skin.strikeout = strikethrough_style;
+
+            let renderer = MarkdownRenderer::new(skin, (width as usize).saturating_sub(1));
+            MarkdownWriter::new(renderer, ArcWriter(writer))
+        };
         Ok(Self {
             state: Default::default(),
             api,
@@ -170,11 +191,8 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             console: Console::new(env.clone(), command.clone()),
             cli,
             command,
-            spinner: SpinnerManager::new(StdoutWriter, ForgeSpinner::new()),
-            markdown: {
-                let (width, _) = terminal::size().unwrap_or((80, 24));
-                MarkdownFormat::new().width(width as usize).writer()
-            },
+            spinner,
+            markdown,
             _guard: forge_tracker::init_tracing(env.log_path(), TRACKER.clone())?,
         })
     }

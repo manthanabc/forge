@@ -26,6 +26,18 @@ impl Writer for StdoutWriter {
     }
 }
 
+impl std::io::Write for StdoutWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let s = std::str::from_utf8(buf).map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid utf8"))?;
+        <Self as Writer>::write(self, s)?;
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        std::io::stdout().flush()
+    }
+}
+
 /// A console writer that handles proper formatting by tracking cursor position
 pub struct WriterWrapper<W: Writer> {
     message: Option<String>,
@@ -54,6 +66,44 @@ impl<W: Writer> Writer for WriterWrapper<W> {
         Ok(())
     }
 }
+
+impl<W: Writer + std::io::Write> std::io::Write for WriterWrapper<W> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        std::io::Write::write(&mut self.writer, buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        std::io::Write::flush(&mut self.writer)
+    }
+}
+
+pub struct SharedWriter(pub std::sync::Arc<std::sync::Mutex<WriterWrapper<StdoutWriter>>>);
+
+impl std::io::Write for SharedWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let mut w = self.0.lock().unwrap();
+        std::io::Write::write(&mut *w, buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        let mut w = self.0.lock().unwrap();
+        std::io::Write::flush(&mut *w)
+    }
+}
+
+pub struct ArcWriter<W>(pub std::sync::Arc<std::sync::Mutex<W>>);
+
+impl<W: std::io::Write> std::io::Write for ArcWriter<W> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        std::io::Write::write(&mut *self.0.lock().unwrap(), buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        std::io::Write::flush(&mut *self.0.lock().unwrap())
+    }
+}
+
+
 
 impl<W: Writer> WriterWrapper<W> {
     pub fn new(writer: W) -> Self {
@@ -93,6 +143,18 @@ mod tests {
         fn writeln(&mut self, s: &str) -> io::Result<()> {
             self.content.push_str(s);
             self.content.push_str("\n");
+            Ok(())
+        }
+    }
+
+    impl std::io::Write for MockWriter {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            let s = std::str::from_utf8(buf).unwrap();
+            self.content.push_str(s);
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
             Ok(())
         }
     }
