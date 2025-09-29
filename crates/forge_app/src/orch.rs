@@ -214,8 +214,9 @@ impl<S: AgentService> Orchestrator<S> {
         reasoning_supported: bool,
     ) -> anyhow::Result<ChatCompletionMessageFull> {
         let tool_supported = self.is_tool_supported()?;
-        let mut transformers = TransformToolCalls::new()
-            .when(|_| !tool_supported)
+        let mut transformers = DefaultTransformation::default()
+            .pipe(SortTools::new())
+            .pipe(TransformToolCalls::new().when(|_| !tool_supported))
             .pipe(ImageHandling::new())
             .pipe(DropReasoningDetails.when(|_| !reasoning_supported))
             .pipe(ReasoningNormalizer.when(|_| reasoning_supported));
@@ -607,7 +608,7 @@ impl<S: AgentService> Orchestrator<S> {
             && event.value.is_some()
         {
             let event_context = EventContext::new(event.clone())
-                .current_time(self.current_time.format("%Y-%m-%d").to_string());
+                .current_date(self.current_time.format("%Y-%m-%d").to_string());
             debug!(event_context = ?event_context, "Event context");
             Some(
                 self.services
