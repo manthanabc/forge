@@ -53,7 +53,7 @@ impl<W: Writer, S: Spinner> SpinnerManager<W, S> {
     pub fn write_ln(&mut self, message: impl ToString) -> Result<()> {
         let is_running = self.spinner.is_running();
         let prev_message = self.message.clone();
-        self.stop_internal(Some(format!("{}\n", message.to_string())), true)?;
+        self.stop_internal(Some(message.to_string()), true)?;
 
         if is_running {
             self.start(prev_message.as_deref())?;

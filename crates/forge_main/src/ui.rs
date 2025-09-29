@@ -948,7 +948,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             }
         }
 
-        self.markdown.flush();
+        let _ = self.markdown.flush();
         Ok(())
     }
 
@@ -1089,7 +1089,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
     }
 
     async fn on_completion(&mut self, conversation: Conversation) -> anyhow::Result<()> {
-        self.markdown.flush();
+        let _ = self.markdown.flush();
         self.spinner.start(Some("Loading Summary"))?;
 
         let info = Info::default()
