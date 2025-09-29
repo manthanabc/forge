@@ -948,6 +948,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             }
         }
 
+        self.markdown.flush();
         Ok(())
     }
 
@@ -1007,6 +1008,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 ChatResponseContent::Title(title) => self.writeln(title.display())?,
                 ChatResponseContent::PlainText(text) => self.writeln(text)?,
                 ChatResponseContent::Markdown(text) => {
+                    self.spinner.stop(None)?;
                     tracing::info!(message = %text, "Agent Response");
                     for c in text.chars() {
                         self.markdown.add_char(c)?;
@@ -1087,6 +1089,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
     }
 
     async fn on_completion(&mut self, conversation: Conversation) -> anyhow::Result<()> {
+        self.markdown.flush();
         self.spinner.start(Some("Loading Summary"))?;
 
         let info = Info::default()

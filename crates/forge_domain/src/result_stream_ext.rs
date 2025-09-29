@@ -52,6 +52,7 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
         let mut messages = Vec::new();
         let mut usage: Usage = Default::default();
         let mut content = String::new();
+        let mut content_buffered = String::new();
         let mut xml_tool_calls = None;
         let mut tool_interrupted = false;
         let mut buffering_started = false;
@@ -85,6 +86,9 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
                     content.push_str(content_part.as_str());
                     buffering_started = is_potentially_tool_call(&content);
 
+                    if buffering_started {
+                        content_buffered += content_part.as_str();
+                    }
                     // Stream content chunk if sender is available and not buffering
                     if let Some(ref sender) = sender
                         && !content_part.is_empty()
@@ -124,6 +128,18 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
             }
         }
 
+        // If buffering occurred, send the buffered cleaned content at the end
+        if buffering_started && let Some(ref sender) = sender {
+            let cleaned_content = remove_tag_with_prefix(content_buffered.as_str(), "forge_");
+            if !cleaned_content.is_empty() {
+                let _ = sender
+                    .send(Ok(ChatResponse::TaskMessage {
+                        content: ChatResponseContent::Markdown(cleaned_content),
+                    }))
+                    .await;
+            }
+        }
+
         // Get the full content from all messages
         let mut content = messages
             .iter()
@@ -147,17 +163,6 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
             }
         }
 
-        // If buffering occurred, send the remaining cleaned content at the end
-        if buffering_started && let Some(ref sender) = sender {
-            let cleaned_content = remove_tag_with_prefix(content.as_str(), "forge_");
-            if !cleaned_content.is_empty() {
-                let _ = sender
-                    .send(Ok(ChatResponse::TaskMessage {
-                        content: ChatResponseContent::Markdown(cleaned_content),
-                    }))
-                    .await;
-            }
-        }
 
         // Extract all tool calls in a fully declarative way with combined sources
         // Start with complete tool calls (for non-streaming mode)

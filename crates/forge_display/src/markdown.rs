@@ -148,6 +148,7 @@ impl<W: io::Write> MarkdownWriter<W> {
         if !self.buffer.is_empty() {
             let result = self.renderer.render(&self.buffer);
             self.buffer.clear();
+            self.previous_rendered.clear();
             Ok(Some(result))
         } else {
             Ok(None)
