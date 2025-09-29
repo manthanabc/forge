@@ -25,6 +25,7 @@ use tokio_stream::StreamExt;
 
 use crate::cli::{Cli, McpCommand, TopLevelCommand, Transport};
 use crate::conversation_selector::ConversationSelector;
+use crate::env::{get_agent_from_env, get_conversation_id_from_env};
 use crate::info::{Info, get_usage};
 use crate::input::Console;
 use crate::model::{Command, ForgeCommandManager};
@@ -103,7 +104,6 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
 
         // Reset previously set CLI parameters by the user
         self.cli.conversation = None;
-        self.cli.resume = None;
 
         self.display_banner()?;
         self.trace_user();
@@ -384,11 +384,49 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 self.on_info().await?;
                 return Ok(());
             }
-            TopLevelCommand::Term(terminal_args) => {
-                self.on_terminal(terminal_args).await?;
+            TopLevelCommand::GenerateZSHPrompt => {
+                self.on_zsh_prompt().await?;
+                return Ok(());
+            }
+            TopLevelCommand::ShowAgents => {
+                self.on_show_agents().await?;
                 return Ok(());
             }
         }
+        Ok(())
+    }
+
+    /// Lists all the agents
+    async fn on_show_agents(&self) -> anyhow::Result<()> {
+        let agents = self.api.get_agents().await?;
+
+        if agents.is_empty() {
+            return Ok(());
+        }
+
+        // Find the maximum agent ID length for consistent padding
+        let max_id_length = agents
+            .iter()
+            .map(|agent| agent.id.as_str().len())
+            .max()
+            .unwrap_or(0);
+
+        let output = agents
+            .iter()
+            .map(|agent| {
+                let title = agent.title.as_deref().unwrap_or("<Missing agent.title>");
+                format!(
+                    "{:<width$} {}",
+                    agent.id.as_str(),
+                    title.lines().collect::<Vec<_>>().join(" "),
+                    width = max_id_length
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        println!("{}", output);
+
         Ok(())
     }
 
@@ -434,12 +472,8 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
         Ok(())
     }
 
-    async fn on_terminal(&mut self, terminal_args: crate::cli::TerminalArgs) -> anyhow::Result<()> {
-        match terminal_args.generate_prompt {
-            crate::cli::ShellType::Zsh => {
-                println!("{}", include_str!("../../../shell-plugin/forge.plugin.zsh"))
-            }
-        }
+    async fn on_zsh_prompt(&self) -> anyhow::Result<()> {
+        println!("{}", include_str!("../../../shell-plugin/forge.plugin.zsh"));
         Ok(())
     }
 
@@ -569,7 +603,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                         {
                             let label = format!(
                                 "{:<n$} {}",
-                                agent.id.as_str().to_case(Case::UpperSnake).bold(),
+                                agent.id.as_str().bold(),
                                 title.lines().collect::<Vec<_>>().join(" ").dimmed()
                             );
                             Agent { label, id: agent.id.clone() }
@@ -717,7 +751,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
     }
 
     async fn init_conversation(&mut self) -> Result<ConversationId> {
-        match self.state.conversation_id {
+        let id = match self.state.conversation_id {
             Some(ref id) => Ok(*id),
             None => {
                 let mut new_conversation = false;
@@ -729,8 +763,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                         serde_json::from_str(ForgeFS::read_utf8(path.as_os_str()).await?.as_str())
                             .context("Failed to parse Conversation")?;
                     conversation
-                } else if let Some(conversation_id) = self.cli.resume {
-                    // Use the explicitly provided conversation ID
+                } else if let Some(conversation_id) = get_conversation_id_from_env() {
                     // Check if conversation with this ID already exists
                     if let Some(conversation) = self.api.conversation(&conversation_id).await? {
                         conversation
@@ -752,20 +785,29 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                     .unwrap_or(self.state.usage.clone());
                 self.spinner.stop(None)?;
 
+                let mut sub_title = conversation.id.into_string();
+                if let Some(ref agent) = get_agent_from_env() {
+                    sub_title.push_str(format!(" [via {agent}]").as_str());
+                }
+
                 if new_conversation {
                     self.writeln_title(
-                        TitleFormat::info("Initialized conversation")
-                            .sub_title(conversation.id.into_string()),
+                        TitleFormat::debug("Initialize".to_string()).sub_title(sub_title),
                     )?;
                 } else {
                     self.writeln_title(
-                        TitleFormat::info("Resumed conversation")
-                            .sub_title(conversation.id.into_string()),
+                        TitleFormat::debug("Continue".to_string()).sub_title(sub_title),
                     )?;
                 }
                 Ok(conversation.id)
             }
+        };
+
+        if let Some(ref agent) = get_agent_from_env() {
+            self.state.operating_agent = AgentId::new(agent)
         }
+
+        id
     }
 
     /// Initialize the state of the UI
