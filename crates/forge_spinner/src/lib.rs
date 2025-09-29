@@ -101,7 +101,7 @@ mod tests {
 
     use super::*;
 
-    impl Default for SpinnerManager<WriterWrapper<TestWriter>, TestSpinner> {
+    impl Default for SpinnerManager<TestWriter, TestSpinner> {
         fn default() -> Self {
             let fixture_writer = Arc::new(Mutex::new(WriterWrapper::new(TestWriter::default())));
             let fixture_spinner = TestSpinner::default();
@@ -214,7 +214,7 @@ mod tests {
         assert_eq!(fixture.message, None);
 
         // writer should add new line.
-        assert_eq!(fixture.writer.message(), None);
+        assert_eq!(fixture.writer.lock().unwrap().message(), None);
     }
 
     #[test]
