@@ -3,7 +3,8 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 use bytes::Bytes;
 use forge_app::domain::{
-    CommandOutput, Environment, McpServerConfig, ToolDefinition, ToolName, ToolOutput,
+    CommandOutput, Conversation, ConversationId, Environment, McpServerConfig, ToolDefinition,
+    ToolName, ToolOutput,
 };
 use forge_app::{WalkedFile, Walker};
 use forge_snaps::Snapshot;
@@ -12,6 +13,15 @@ use reqwest::header::HeaderMap;
 use reqwest_eventsource::EventSource;
 use url::Url;
 
+/// Infrastructure trait for accessing environment configuration and system
+/// variables.
+///
+/// This trait provides access to the application environment which includes
+/// configuration for both global and project-local agent directories. The
+/// Environment exposes:
+/// - Global agent directory via `agent_path()` (typically ~/.forge/agents)
+/// - Project-local agent directory via `agent_cwd_path()` (typically
+///   .forge/agents)
 pub trait EnvironmentInfra: Send + Sync {
     fn get_environment(&self) -> Environment;
     fn get_env_var(&self, key: &str) -> Option<String>;
@@ -114,6 +124,7 @@ pub trait CommandInfra: Send + Sync {
         command: String,
         working_dir: PathBuf,
         silent: bool,
+        env_vars: Option<Vec<String>>,
     ) -> anyhow::Result<CommandOutput>;
 
     /// execute the shell command on present stdio.
@@ -121,6 +132,7 @@ pub trait CommandInfra: Send + Sync {
         &self,
         command: &str,
         working_dir: PathBuf,
+        env_vars: Option<Vec<String>>,
     ) -> anyhow::Result<std::process::ExitStatus>;
 }
 
@@ -208,4 +220,18 @@ pub trait DirectoryReaderInfra: Send + Sync {
         directory: &Path,
         pattern: Option<&str>, // Optional glob pattern like "*.md"
     ) -> anyhow::Result<Vec<(PathBuf, String)>>;
+}
+
+#[async_trait::async_trait]
+pub trait ConversationRepository: Send + Sync {
+    async fn upsert_conversation(&self, conversation: Conversation) -> anyhow::Result<()>;
+    async fn get_conversation(
+        &self,
+        conversation_id: &ConversationId,
+    ) -> anyhow::Result<Option<Conversation>>;
+    async fn get_all_conversations(
+        &self,
+        limit: Option<usize>,
+    ) -> anyhow::Result<Option<Vec<Conversation>>>;
+    async fn get_last_conversation(&self) -> anyhow::Result<Option<Conversation>>;
 }

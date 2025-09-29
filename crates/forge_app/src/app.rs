@@ -12,8 +12,9 @@ use crate::orch::Orchestrator;
 use crate::services::{CustomInstructionsService, TemplateService};
 use crate::tool_registry::ToolRegistry;
 use crate::{
-    AppConfigService, AttachmentService, ConversationService, EnvironmentService,
-    FileDiscoveryService, ProviderRegistry, ProviderService, Services, Walker, WorkflowService,
+    AgentLoaderService, AppConfigService, AttachmentService, ConversationService,
+    EnvironmentService, FileDiscoveryService, McpService, ProviderRegistry, ProviderService,
+    Services, Walker, WorkflowService,
 };
 
 /// ForgeApp handles the core chat functionality by orchestrating various
@@ -50,8 +51,6 @@ impl<S: Services> ForgeApp<S> {
             .unwrap_or_default()
             .expect("conversation for the request should've been created at this point.");
 
-        // Get tool definitions and models
-        let tool_definitions = self.tool_registry.list().await?;
         let config = services.get_app_config().await.unwrap_or_default();
         let provider = services
             .get_provider(config)
@@ -80,6 +79,7 @@ impl<S: Services> ForgeApp<S> {
         // Register templates using workflow path or environment fallback
         let template_path = workflow
             .templates
+            .as_ref()
             .map_or(environment.templates(), |templates| {
                 PathBuf::from(templates)
             });
@@ -94,14 +94,36 @@ impl<S: Services> ForgeApp<S> {
 
         let custom_instructions = services.get_custom_instructions().await;
 
+        // Prepare agents with user configuration and subscriptions
+        let agents = services.get_agents().await?;
+
+        let mcp_tools = self.services.mcp_service().list().await?;
+        let agent = agents
+            .into_iter()
+            .map(|agent| {
+                agent
+                    .apply_workflow_config(&workflow)
+                    .extend_mcp_tools(&mcp_tools)
+            })
+            .find(|agent| agent.has_subscription(&chat.event.name))
+            .ok_or(crate::Error::UnsubscribedEvent(chat.event.name.to_owned()))?;
+
+        // Get system and mcp tool definitions
+        let all_tool_definitions = self.tool_registry.list().await?;
+        let tool_definitions = agent.resolve_tool_definitions(&all_tool_definitions);
+        let max_tool_failure_per_turn = agent.max_tool_failure_per_turn.unwrap_or(3);
+
         // Create the orchestrator with all necessary dependencies
         let orch = Orchestrator::new(
             services.clone(),
             environment.clone(),
             conversation,
             Local::now(),
-            custom_instructions,
+            agent,
+            chat.event,
         )
+        .error_tracker(ToolErrorTracker::new(max_tool_failure_per_turn))
+        .custom_instructions(custom_instructions)
         .tool_definitions(tool_definitions)
         .models(models)
         .files(files);
@@ -112,7 +134,7 @@ impl<S: Services> ForgeApp<S> {
                 async move {
                     // Execute dispatch and always save conversation afterwards
                     let mut orch = orch.sender(tx.clone());
-                    let dispatch_result = orch.chat(chat.event).await;
+                    let dispatch_result = orch.run().await;
 
                     // Always save conversation using get_conversation()
                     let conversation = orch.get_conversation().clone();
@@ -146,7 +168,7 @@ impl<S: Services> ForgeApp<S> {
             .services
             .find_conversation(conversation_id)
             .await?
-            .ok_or_else(|| anyhow::anyhow!("Conversation not found: {}", conversation_id))?;
+            .ok_or_else(|| forge_domain::Error::ConversationNotFound(*conversation_id))?;
 
         // Get the context from the conversation
         let context = match conversation.context.as_ref() {
@@ -163,8 +185,10 @@ impl<S: Services> ForgeApp<S> {
 
         // Find the main agent (first agent in the conversation)
         // In most cases, there should be a primary agent for compaction
-        let agent = conversation
-            .agents
+        let agent = self
+            .services
+            .get_agents()
+            .await?
             .first()
             .ok_or_else(|| anyhow::anyhow!("No agents found in conversation"))?
             .clone();

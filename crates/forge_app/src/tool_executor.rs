@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use forge_domain::{TitleFormat, ToolCallContext, ToolCallFull, ToolOutput, Tools};
+use forge_domain::{LineNumbers, TitleFormat, ToolCallContext, ToolCallFull, ToolOutput, Tools};
 
 use crate::fmt::content::FormatContent;
 use crate::operation::{TempContentFiles, ToolOperation};
@@ -146,6 +146,16 @@ impl<
                         input.end_line.map(|i| i as u64),
                     )
                     .await?;
+                let output = if input.show_line_numbers {
+                    let numbered_content = output
+                        .content
+                        .file_content()
+                        .numbered_from(output.start_line as usize);
+                    output.content(crate::Content::file(numbered_content))
+                } else {
+                    output
+                };
+
                 (input, output).into()
             }
             Tools::Write(input) => {
@@ -194,7 +204,12 @@ impl<
             Tools::Shell(input) => {
                 let output = self
                     .services
-                    .execute(input.command.clone(), input.cwd.clone(), input.keep_ansi)
+                    .execute(
+                        input.command.clone(),
+                        input.cwd.clone(),
+                        input.keep_ansi,
+                        input.env.clone(),
+                    )
                     .await?;
                 output.into()
             }

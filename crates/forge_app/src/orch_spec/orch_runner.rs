@@ -1,9 +1,9 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
-use std::time::Duration;
 
 use forge_domain::{
-    ChatCompletionMessage, ChatResponse, Conversation, ConversationId, ToolCallFull, ToolResult,
+    ChatCompletionMessage, ChatResponse, Conversation, ConversationId, ToolCallFull,
+    ToolErrorTracker, ToolResult,
 };
 use handlebars::{Handlebars, no_escape};
 use rust_embed::Embed;
@@ -57,34 +57,44 @@ impl Runner {
     pub async fn run(setup: &mut TestContext) -> anyhow::Result<()> {
         const LIMIT: usize = 1024;
         let (tx, mut rx) = tokio::sync::mpsc::channel::<anyhow::Result<ChatResponse>>(LIMIT);
-        let agents = setup.agents.clone();
+        let handle = tokio::spawn(async move {
+            let mut responses = Vec::new();
+
+            while let Some(item) = rx.recv().await {
+                responses.push(item);
+            }
+
+            responses
+        });
+
         let services = Arc::new(Runner::new(setup));
-        let conversation = Conversation::new(
-            ConversationId::generate(),
-            setup.workflow.clone(),
-            Default::default(),
-            agents,
-        );
+        // setup the conversation
+        let conversation = Conversation::new(ConversationId::generate()).title(setup.title.clone());
+
+        let agent = setup.agent.clone();
+        let event = setup.event.clone();
+        let system_tools = setup.tools.clone();
 
         let orch = Orchestrator::new(
             services.clone(),
             setup.env.clone(),
             conversation,
             setup.current_time,
-            vec![], // empty custom_instructions
+            agent.apply_workflow_config(&setup.workflow),
+            event,
         )
+        .error_tracker(ToolErrorTracker::new(3))
+        .tool_definitions(system_tools)
         .sender(tx)
         .files(setup.files.clone());
 
         let (mut orch, runner) = (orch, services);
-        let event = setup.event.clone();
-        let mut chat_responses = Vec::new();
-        let result = orch.chat(event).await;
-        tokio::time::timeout(
-            Duration::from_secs(1),
-            rx.recv_many(&mut chat_responses, LIMIT),
-        )
-        .await?;
+
+        let result = orch.run().await;
+        drop(orch);
+
+        let chat_responses = handle.await?;
+
         setup.output.chat_responses.extend(chat_responses);
         setup
             .output
@@ -103,6 +113,7 @@ impl AgentService for Runner {
         context: forge_domain::Context,
     ) -> forge_domain::ResultStream<ChatCompletionMessage, anyhow::Error> {
         let mut responses = self.test_completions.lock().await;
+
         if let Some(message) = responses.pop_front() {
             Ok(Box::pin(tokio_stream::iter(std::iter::once(Ok(message)))))
         } else {
@@ -120,6 +131,7 @@ impl AgentService for Runner {
         _: &forge_domain::ToolCallContext,
         test_call: forge_domain::ToolCallFull,
     ) -> forge_domain::ToolResult {
+        let name = test_call.name.clone();
         let mut guard = self.test_tool_calls.lock().await;
         for (id, (call, result)) in guard.iter().enumerate() {
             if call.call_id == test_call.call_id {
@@ -128,7 +140,8 @@ impl AgentService for Runner {
                 return result;
             }
         }
-        panic!("Tool call not found")
+
+        panic!("No mock tool call not found: {name}")
     }
 
     async fn render(

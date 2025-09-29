@@ -1,6 +1,6 @@
 use forge_domain::{
-    ChatCompletionMessage, ChatResponse, Content, FinishReason, Role, ToolCallArguments,
-    ToolCallFull, ToolOutput, ToolResult,
+    ChatCompletionMessage, ChatResponse, Content, FinishReason, ReasoningConfig, Role,
+    ToolCallArguments, ToolCallFull, ToolOutput, ToolResult, ToolsDiscriminants,
 };
 use pretty_assertions::assert_eq;
 use serde_json::json;
@@ -429,4 +429,83 @@ async fn test_mixed_agent_and_non_agent_tool_calls() {
         tool_call_end_names.contains(&"attempt_completion"),
         "Should have ToolCallEnd for attempt_completion"
     );
+}
+
+#[tokio::test]
+async fn test_reasoning_should_be_in_context() {
+    let reasoning_content = "Thinking .....";
+    let mut ctx =
+        TestContext::init_forge_task("Solve a complex problem").mock_assistant_responses(vec![
+            ChatCompletionMessage::assistant(Content::full(reasoning_content))
+                .finish_reason(FinishReason::Stop),
+        ]);
+
+    // Update the agent to set the reasoning.
+    ctx.agent = ctx
+        .agent
+        .reasoning(ReasoningConfig::default().effort(forge_domain::Effort::High));
+    ctx.run().await.unwrap();
+
+    let conversation = ctx.output.conversation_history.last().unwrap();
+    let context = conversation.context.as_ref().unwrap();
+    assert!(context.is_reasoning_supported());
+}
+
+#[tokio::test]
+async fn test_reasoning_not_supported_when_disabled() {
+    let reasoning_content = "Thinking .....";
+    let mut ctx =
+        TestContext::init_forge_task("Solve a complex problem").mock_assistant_responses(vec![
+            ChatCompletionMessage::assistant(Content::full(reasoning_content))
+                .finish_reason(FinishReason::Stop),
+        ]);
+
+    // Update the agent to set the reasoning.
+    ctx.agent = ctx.agent.reasoning(
+        ReasoningConfig::default()
+            .effort(forge_domain::Effort::High)
+            .enabled(false), // disable the reasoning explicitly
+    );
+    ctx.run().await.unwrap();
+
+    let conversation = ctx.output.conversation_history.last().unwrap();
+    let context = conversation.context.as_ref().unwrap();
+    assert!(!context.is_reasoning_supported());
+}
+
+#[tokio::test]
+async fn test_multiple_consecutive_tool_calls() {
+    let tool_call =
+        ToolCallFull::new("fs_read").arguments(ToolCallArguments::from(json!({"path": "abc.txt"})));
+    let tool_result = ToolResult::new("fs_read").output(Ok(ToolOutput::text("Greetings")));
+
+    let mut ctx = TestContext::init_forge_task("Read a file")
+        .mock_tool_call_responses(vec![
+            (tool_call.clone(), tool_result.clone()),
+            (tool_call.clone(), tool_result.clone()),
+            (tool_call.clone(), tool_result.clone()),
+            (tool_call.clone(), tool_result.clone()),
+            (tool_call.clone(), tool_result.clone()),
+        ])
+        .mock_assistant_responses(vec![
+            ChatCompletionMessage::assistant("Reading 1").add_tool_call(tool_call.clone()),
+            ChatCompletionMessage::assistant("Reading 2").add_tool_call(tool_call.clone()),
+            ChatCompletionMessage::assistant("Reading 3").add_tool_call(tool_call.clone()),
+            ChatCompletionMessage::assistant("Reading 4").add_tool_call(tool_call.clone()),
+            ChatCompletionMessage::assistant("Completing Task").add_tool_call(ToolCallFull::new(
+                ToolsDiscriminants::AttemptCompletion.name(),
+            )),
+        ]);
+
+    let _ = ctx.run().await;
+
+    let retry_attempts = ctx
+        .output
+        .chat_responses
+        .into_iter()
+        .filter_map(|response| response.ok())
+        .filter(|response| matches!(response, ChatResponse::TaskComplete))
+        .count();
+
+    assert_eq!(retry_attempts, 1, "Should complete the task")
 }

@@ -5,7 +5,8 @@ use chrono::{DateTime, Local};
 use derive_setters::Setters;
 use forge_domain::{
     Agent, AgentId, ChatCompletionMessage, ChatResponse, ContextMessage, Conversation, Environment,
-    Event, HttpConfig, ModelId, RetryConfig, Role, Template, ToolCallFull, ToolResult, Workflow,
+    Event, HttpConfig, ModelId, RetryConfig, Role, Template, ToolCallFull, ToolDefinition,
+    ToolResult, ToolsDiscriminants, Workflow,
 };
 use url::Url;
 
@@ -22,10 +23,12 @@ pub struct TestContext {
     pub files: Vec<String>,
     pub env: Environment,
     pub current_time: DateTime<Local>,
+    pub title: Option<String>,
 
     // Final output of the test is store in the context
     pub output: TestOutput,
-    pub agents: Vec<Agent>,
+    pub agent: Agent,
+    pub tools: Vec<ToolDefinition>,
 }
 
 impl TestContext {
@@ -74,14 +77,21 @@ impl TestContext {
                 max_file_size: 1024 * 1024 * 5,
                 max_search_result_bytes: 200,
                 stdout_max_line_length: 200, // 5 MB
+                auto_open_dump: false,
+                custom_history_path: None,
             },
-            agents: vec![
-                Agent::new(AgentId::new("forge"))
-                    .system_prompt(Template::new("You are Forge"))
-                    .tools(vec![("fs_read").into(), ("fs_write").into()]),
-                Agent::new(AgentId::new("must"))
-                    .system_prompt(Template::new("You are Muse"))
-                    .tools(vec![("fs_read").into()]),
+            title: Some("test-conversation".into()),
+            agent: Agent::new(AgentId::new("forge"))
+                .system_prompt(Template::new("You are Forge"))
+                .tools(vec![
+                    ("fs_read").into(),
+                    ("fs_write").into(),
+                    ToolsDiscriminants::AttemptCompletion.name(),
+                ]),
+            tools: vec![
+                ToolDefinition::new("fs_read"),
+                ToolDefinition::new("fs_write"),
+                ToolsDiscriminants::AttemptCompletion.definition(),
             ],
         }
     }

@@ -29,12 +29,6 @@ pub trait API: Sync + Send {
     /// Returns the current environment
     fn environment(&self) -> Environment;
 
-    /// Creates a new conversation with the given workflow configuration
-    async fn init_conversation<W: Into<Workflow> + Send + Sync>(
-        &self,
-        config: W,
-    ) -> Result<Conversation>;
-
     /// Adds a new conversation to the conversation store
     async fn upsert_conversation(&self, conversation: Conversation) -> Result<()>;
 
@@ -65,6 +59,12 @@ pub trait API: Sync + Send {
 
     /// Returns the conversation with the given ID
     async fn conversation(&self, conversation_id: &ConversationId) -> Result<Option<Conversation>>;
+
+    /// Lists all conversations for the active workspace
+    async fn list_conversations(&self, limit: Option<usize>) -> Result<Vec<Conversation>>;
+
+    /// Finds the last active conversation for the current workspace
+    async fn last_conversation(&self) -> Result<Option<Conversation>>;
 
     /// Compacts the context of the main agent for the given conversation and
     /// persists it. Returns metrics about the compaction (original vs.

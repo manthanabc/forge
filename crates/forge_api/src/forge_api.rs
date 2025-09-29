@@ -66,16 +66,6 @@ impl<A: Services, F: CommandInfra> API for ForgeAPI<A, F> {
         forge_app.chat(chat).await
     }
 
-    async fn init_conversation<W: Into<Workflow> + Send + Sync>(
-        &self,
-        workflow: W,
-    ) -> anyhow::Result<Conversation> {
-        let agents = self.get_agents().await?;
-        self.services
-            .init_conversation(workflow.into(), agents)
-            .await
-    }
-
     async fn upsert_conversation(&self, conversation: Conversation) -> anyhow::Result<()> {
         self.services.upsert_conversation(conversation).await
     }
@@ -121,13 +111,25 @@ impl<A: Services, F: CommandInfra> API for ForgeAPI<A, F> {
         self.services.find_conversation(conversation_id).await
     }
 
+    async fn list_conversations(&self, limit: Option<usize>) -> anyhow::Result<Vec<Conversation>> {
+        Ok(self
+            .services
+            .get_conversations(limit)
+            .await?
+            .unwrap_or_default())
+    }
+
+    async fn last_conversation(&self) -> anyhow::Result<Option<Conversation>> {
+        self.services.last_conversation().await
+    }
+
     async fn execute_shell_command(
         &self,
         command: &str,
         working_dir: PathBuf,
     ) -> anyhow::Result<CommandOutput> {
         self.infra
-            .execute_command(command.to_string(), working_dir, false)
+            .execute_command(command.to_string(), working_dir, false, None)
             .await
     }
     async fn read_mcp_config(&self) -> Result<McpConfig> {
@@ -149,7 +151,7 @@ impl<A: Services, F: CommandInfra> API for ForgeAPI<A, F> {
         command: &str,
     ) -> anyhow::Result<std::process::ExitStatus> {
         let cwd = self.environment().cwd;
-        self.infra.execute_command_raw(command, cwd).await
+        self.infra.execute_command_raw(command, cwd, None).await
     }
 
     async fn init_login(&self) -> Result<InitAuth> {
