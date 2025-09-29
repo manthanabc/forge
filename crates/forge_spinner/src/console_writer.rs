@@ -28,7 +28,8 @@ impl Writer for StdoutWriter {
 
 impl std::io::Write for StdoutWriter {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let s = std::str::from_utf8(buf).map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid utf8"))?;
+        let s = std::str::from_utf8(buf)
+            .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid utf8"))?;
         <Self as Writer>::write(self, s)?;
         Ok(buf.len())
     }
@@ -102,8 +103,6 @@ impl<W: std::io::Write> std::io::Write for ArcWriter<W> {
         std::io::Write::flush(&mut *self.0.lock().unwrap())
     }
 }
-
-
 
 impl<W: Writer> WriterWrapper<W> {
     pub fn new(writer: W) -> Self {

@@ -1,8 +1,9 @@
 mod console_writer;
 mod spinner;
 
-use anyhow::Result;
 use std::sync::{Arc, Mutex};
+
+use anyhow::Result;
 pub use console_writer::*;
 pub use spinner::*;
 
@@ -195,7 +196,10 @@ mod tests {
         assert_eq!(fixture.message, None);
 
         // writer should add new line.
-        assert_eq!(fixture.writer.lock().unwrap().message(), Some(&"completed\n".to_string()))
+        assert_eq!(
+            fixture.writer.lock().unwrap().message(),
+            Some(&"completed\n".to_string())
+        )
     }
 
     #[test]

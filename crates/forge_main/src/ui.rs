@@ -11,16 +11,16 @@ use forge_api::{
     ToolName, Workflow,
 };
 use forge_display::{MarkdownRenderer, MarkdownWriter};
+use forge_domain::{ChatResponseContent, McpConfig, McpServerConfig, Provider, Scope, TitleFormat};
 use forge_fs::ForgeFS;
 use forge_spinner::{ArcWriter, ForgeSpinner, SpinnerManager, StdoutWriter, WriterWrapper};
-use termimad::crossterm::style::{Attribute, Color};
-use termimad::{CompoundStyle, LineStyle, MadSkin};
-use forge_domain::{ChatResponseContent, McpConfig, McpServerConfig, Provider, Scope, TitleFormat};
 use forge_tracker::ToolCallPayload;
 use merge::Merge;
 use serde::Deserialize;
 use serde_json::Value;
+use termimad::crossterm::style::{Attribute, Color};
 use termimad::crossterm::terminal;
+use termimad::{CompoundStyle, LineStyle, MadSkin};
 use tokio_stream::StreamExt;
 
 use crate::cli::{Cli, McpCommand, TopLevelCommand, Transport};
@@ -171,7 +171,8 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
         let markdown = {
             let (width, _) = terminal::size().unwrap_or((80, 24));
             let mut skin = MadSkin::default();
-            let compound_style = CompoundStyle::new(Some(Color::Cyan), None, Attribute::Bold.into());
+            let compound_style =
+                CompoundStyle::new(Some(Color::Cyan), None, Attribute::Bold.into());
             skin.inline_code = compound_style.clone();
 
             let codeblock_style = CompoundStyle::new(None, None, Default::default());

@@ -1,7 +1,8 @@
+use std::io;
+
 use derive_setters::Setters;
 use lazy_regex::regex;
 use regex::Regex;
-use std::io;
 use syntect::easy::HighlightLines;
 use syntect::highlighting::ThemeSet;
 use syntect::parsing::SyntaxSet;
@@ -165,12 +166,14 @@ impl<W: io::Write> MarkdownWriter<W> {
         if common < lines_prev.len() {
             let up_lines = lines_prev.len() - common;
             if up_lines > 0 {
-                self.writer.write_all(format!("\x1b[{}A", up_lines).as_bytes())?;
+                self.writer
+                    .write_all(format!("\x1b[{}A", up_lines).as_bytes())?;
             }
             self.writer.write_all(b"\x1b[0J")?;
         }
         for line in &lines_new[common..] {
-            self.writer.write_all(format!("{}\x1b[K\n", line).as_bytes())?;
+            self.writer
+                .write_all(format!("{}\x1b[K\n", line).as_bytes())?;
         }
         self.writer.flush()?;
         self.previous_rendered = content.to_string();
