@@ -33,12 +33,17 @@ impl<W: Writer, S: Spinner> SpinnerManager<W, S> {
     }
 
     /// Stop the active spinner if any and prints the provided content.
-    fn stop_internal(&mut self, message: Option<String>, _new_line: bool) -> Result<()> {
+    fn stop_internal(&mut self, message: Option<String>, new_line: bool) -> Result<()> {
         self.spinner.stop()?;
         // Then print the message if provided
         if let Some(msg) = message {
-            let mut w = self.writer.lock().unwrap();
-            w.writeln(&msg)?;
+            if new_line {
+                let mut w = self.writer.lock().unwrap();
+                w.writeln(&msg)?;
+            } else {
+                let mut w = self.writer.lock().unwrap();
+                w.write(&msg)?;
+            }
         }
         self.message = None;
         Ok(())
@@ -48,20 +53,12 @@ impl<W: Writer, S: Spinner> SpinnerManager<W, S> {
     pub fn write_ln(&mut self, message: impl ToString) -> Result<()> {
         let is_running = self.spinner.is_running();
         let prev_message = self.message.clone();
+        self.stop_internal(Some(format!("{}\n", message.to_string())), true)?;
 
         if is_running {
-            self.stop_internal(None, false)?;
+            self.start(prev_message.as_deref())?;
         }
-
-        {
-            let mut w = self.writer.lock().unwrap();
-            w.writeln(&message.to_string())?;
-        }
-        self.message = Some(format!("{}\n", message.to_string()));
-
-        if is_running {
-            self.spinner.start(prev_message.as_deref())?;
-        }
+        // self.message = Some(format!("{}\n", message.to_string()));
 
         Ok(())
     }
@@ -70,19 +67,10 @@ impl<W: Writer, S: Spinner> SpinnerManager<W, S> {
     pub fn write(&mut self, message: impl ToString) -> Result<()> {
         let is_running = self.spinner.is_running();
         let prev_message = self.message.clone();
+        self.stop_internal(Some(message.to_string()), false)?;
 
         if is_running {
-            self.stop_internal(None, false)?;
-        }
-
-        {
-            let mut w = self.writer.lock().unwrap();
-            w.write(&message.to_string())?;
-        }
-        self.message = Some(message.to_string());
-
-        if is_running {
-            self.spinner.start(prev_message.as_deref())?;
+            self.message = prev_message;
         }
 
         Ok(())

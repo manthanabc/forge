@@ -163,7 +163,6 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
             }
         }
 
-
         // Extract all tool calls in a fully declarative way with combined sources
         // Start with complete tool calls (for non-streaming mode)
         let initial_tool_calls: Vec<ToolCallFull> = messages
