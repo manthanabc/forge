@@ -4,4 +4,4 @@ pub mod markdown;
 
 pub use diff::DiffFormat;
 pub use grep::GrepFormat;
-pub use markdown::{MarkdownFormat, MarkdownRenderer, MarkdownStreamer, MarkdownWriter};
+pub use markdown::{MarkdownFormat, MarkdownRenderer, MarkdownWriter};

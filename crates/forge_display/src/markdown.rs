@@ -106,14 +106,51 @@ impl MarkdownRenderer {
     }
 }
 
-pub struct MarkdownStreamer<W: io::Write> {
+pub struct MarkdownWriter<W: io::Write> {
+    buffer: String,
+    renderer: MarkdownRenderer,
     previous_rendered: String,
     writer: W,
 }
 
-impl<W: io::Write> MarkdownStreamer<W> {
-    pub fn new(writer: W) -> Self {
-        Self { previous_rendered: String::new(), writer }
+impl<W: io::Write> MarkdownWriter<W> {
+    pub fn new(renderer: MarkdownRenderer, writer: W) -> Self {
+        Self {
+            buffer: String::new(),
+            renderer,
+            previous_rendered: String::new(),
+            writer,
+        }
+    }
+
+    pub fn add_chunk(&mut self, chunk: &str) -> io::Result<Option<String>> {
+        for c in chunk.chars() {
+            self.add_char(c)?;
+        }
+        self.try_render()
+    }
+
+    pub fn add_char(&mut self, c: char) -> io::Result<()> {
+        self.buffer.push(c);
+        if let Some(rendered) = self.try_render()? {
+            self.stream(&rendered)?;
+        }
+        Ok(())
+    }
+
+    fn try_render(&mut self) -> io::Result<Option<String>> {
+        let result = self.renderer.render(&self.buffer);
+        Ok(Some(result))
+    }
+
+    pub fn flush(&mut self) -> io::Result<Option<String>> {
+        if !self.buffer.is_empty() {
+            let result = self.renderer.render(&self.buffer);
+            self.buffer.clear();
+            Ok(Some(result))
+        } else {
+            Ok(None)
+        }
     }
 
     pub fn stream(&mut self, content: &str) -> io::Result<()> {
@@ -138,52 +175,6 @@ impl<W: io::Write> MarkdownStreamer<W> {
         self.writer.flush()?;
         self.previous_rendered = content.to_string();
         Ok(())
-    }
-}
-
-pub struct MarkdownWriter<W: io::Write> {
-    buffer: String,
-    renderer: MarkdownRenderer,
-    streamer: MarkdownStreamer<W>,
-}
-
-impl<W: io::Write> MarkdownWriter<W> {
-    pub fn new(renderer: MarkdownRenderer, writer: W) -> Self {
-        Self {
-            buffer: String::new(),
-            renderer,
-            streamer: MarkdownStreamer::new(writer),
-        }
-    }
-
-    pub fn add_chunk(&mut self, chunk: &str) -> io::Result<Option<String>> {
-        for c in chunk.chars() {
-            self.add_char(c)?;
-        }
-        self.try_render()
-    }
-
-    pub fn add_char(&mut self, c: char) -> io::Result<()> {
-        self.buffer.push(c);
-        if let Some(rendered) = self.try_render()? {
-            self.streamer.stream(&rendered)?;
-        }
-        Ok(())
-    }
-
-    fn try_render(&mut self) -> io::Result<Option<String>> {
-        let result = self.renderer.render(&self.buffer);
-        Ok(Some(result))
-    }
-
-    pub fn flush(&mut self) -> io::Result<Option<String>> {
-        if !self.buffer.is_empty() {
-            let result = self.renderer.render(&self.buffer);
-            self.buffer.clear();
-            Ok(Some(result))
-        } else {
-            Ok(None)
-        }
     }
 }
 
