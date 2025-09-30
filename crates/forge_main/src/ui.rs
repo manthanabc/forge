@@ -1010,10 +1010,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 ChatResponseContent::Markdown(text) => {
                     self.spinner.stop(None)?;
                     tracing::info!(message = %text, "Agent Response");
-                    for c in text.chars() {
-                        self.markdown.add_char(c)?;
-                        std::thread::sleep(std::time::Duration::from_millis(1));
-                    }
+                    self.markdown.add_chunk(&text)?;
                 }
             },
             ChatResponse::ToolCallStart(_) => {

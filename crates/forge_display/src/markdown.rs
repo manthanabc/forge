@@ -124,11 +124,14 @@ impl<W: io::Write> MarkdownWriter<W> {
         }
     }
 
-    pub fn add_chunk(&mut self, chunk: &str) -> io::Result<Option<String>> {
-        for c in chunk.chars() {
-            self.add_char(c)?;
+    pub fn add_chunk(&mut self, chunk: &str) -> io::Result<()> {
+        self.buffer.push_str(chunk);
+
+        if let Some(rendered) = self.try_render()? {
+            self.stream(&rendered)?;
         }
-        self.try_render()
+
+        Ok(())
     }
 
     pub fn add_char(&mut self, c: char) -> io::Result<()> {
@@ -337,14 +340,8 @@ mod tests {
         let flush_result = writer.flush();
         assert!(flush_result.is_ok());
 
-        // Collect all output
-        let mut output = String::new();
-        if let Some(rendered) = result.unwrap() {
-            output.push_str(&rendered);
-        }
-        if let Some(remaining) = flush_result.unwrap() {
-            output.push_str(&remaining);
-        }
+        // Collect all output from the writer vec
+        let output = String::from_utf8(writer.writer).unwrap();
 
         let actual_clean = strip_ansi_escapes::strip_str(&output).trim().to_string();
 
@@ -364,14 +361,8 @@ mod tests {
         let flush_result = writer.flush();
         assert!(flush_result.is_ok());
 
-        // Collect all output
-        let mut output = String::new();
-        if let Some(rendered) = result.unwrap() {
-            output.push_str(&rendered);
-        }
-        if let Some(remaining) = flush_result.unwrap() {
-            output.push_str(&remaining);
-        }
+        // Collect all output from the writer vec
+        let output = String::from_utf8(writer.writer).unwrap();
 
         let actual_clean = strip_ansi_escapes::strip_str(&output).trim().to_string();
 
