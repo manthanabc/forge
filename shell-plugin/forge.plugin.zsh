@@ -26,14 +26,17 @@ function _forge_fzf() {
     fzf --cycle --select-1 --height 40% --reverse "$@"
 }
 
+# Helper function to print operating agent messages with consistent formatting
+function _forge_print_agent_message() {
+    local agent_name="${1:-${FORGE_ACTIVE_AGENT}}"
+    echo "\033[33m⏺\033[0m \033[90m[$(date '+%H:%M:%S')] \033[1;37m${agent_name:u}\033[0m \033[90mis now active\033[0m"
+}
+
 
 
 # Store conversation ID in a temporary variable (local to plugin)
 export FORGE_CONVERSATION_ID=""
-export FORGE_ACTIVE_AGENT=""
-
-# Store the last command for reuse
-typeset -h _FORGE_USER_ACTION=""
+export FORGE_ACTIVE_AGENT="forge"
 
 # Custom completion widget that handles both :commands and @ completion
 function forge-completion() {
@@ -128,16 +131,26 @@ function forge-accept-line() {
             echo "\033[36m⏺\033[0m \033[90m[$(date '+%H:%M:%S')] Reset ${FORGE_CONVERSATION_ID}\033[0m"
         fi
         
+        _forge_print_agent_message "FORGE"
+        
         FORGE_CONVERSATION_ID=""
-        _FORGE_USER_ACTION=""
+        FORGE_ACTIVE_AGENT="forge"
         BUFFER=""
         CURSOR=${#BUFFER}
         zle reset-prompt
         return 0
     fi
-    
-    # Store the action for potential reuse
-    _FORGE_USER_ACTION="$user_action"
+
+    # Check if input_text is empty - just set the active agent
+    if [[ -z "$input_text" ]]; then
+        echo
+        FORGE_ACTIVE_AGENT="${user_action:-${FORGE_ACTIVE_AGENT}}"
+        _forge_print_agent_message
+        BUFFER=""
+        CURSOR=0
+        zle reset-prompt
+        return 0
+    fi
     
     # Generate conversation ID if needed (in parent shell context)
     if [[ -z "$FORGE_CONVERSATION_ID" ]]; then
@@ -145,7 +158,7 @@ function forge-accept-line() {
     fi
     
     # Set the active agent for this execution
-    FORGE_ACTIVE_AGENT="${user_action:-${FORGE_ACTIVE_AGENT:-forge}}"
+    FORGE_ACTIVE_AGENT="${user_action:-${FORGE_ACTIVE_AGENT}}"
     
     # Build and execute the forge command
     local forge_cmd="$_FORGE_BIN"
