@@ -46,7 +46,7 @@ impl MarkdownRenderer {
     }
 
     fn render_markdown(&self, text: &str) -> Vec<Segment> {
-        let re = regex!(r"(?s)```(\w+)?\n(.*?)(```|\z)");
+        let re = regex!(r"(?ms)^```(\w+)?\n(.*?)(^```|\z)");
         let mut segments = vec![];
         let mut last_end = 0;
         for cap in re.captures_iter(text) {

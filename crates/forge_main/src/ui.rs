@@ -1000,9 +1000,6 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
     async fn on_chat(&mut self, chat: ChatRequest) -> Result<()> {
         let mut stream = self.api.chat(chat).await?;
 
-        // Stop spinner during streaming to avoid interference
-        self.spinner.stop(None)?;
-
         while let Some(message) = stream.next().await {
             match message {
                 Ok(message) => self.handle_chat_response(message).await?,
@@ -1013,6 +1010,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
         }
 
         let _ = self.markdown.flush();
+        self.spinner.start(None)?;
         Ok(())
     }
 
@@ -1074,7 +1072,6 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 ChatResponseContent::Markdown(text) => {
                     self.spinner.stop(None)?;
                     self.markdown.add_chunk(&text)?;
-                    self.spinner.start(None)?;
                 }
             },
             ChatResponse::ToolCallStart(_) => {
@@ -1162,7 +1159,6 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
         // }
 
         self.writeln(info)?;
-
         self.spinner.stop(None)?;
 
         // Only prompt for new conversation if in interactive mode
