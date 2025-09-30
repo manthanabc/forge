@@ -1009,8 +1009,8 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 ChatResponseContent::PlainText(text) => self.writeln(text)?,
                 ChatResponseContent::Markdown(text) => {
                     self.spinner.stop(None)?;
-                    tracing::info!(message = %text, "Agent Response");
                     self.markdown.add_chunk(&text)?;
+                    self.spinner.start(None)?;
                 }
             },
             ChatResponse::ToolCallStart(_) => {
