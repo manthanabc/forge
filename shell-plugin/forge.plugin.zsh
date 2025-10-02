@@ -8,6 +8,9 @@
 typeset -h _FORGE_BIN="${FORGE_BIN:-forge}"
 typeset -h _FORGE_CONVERSATION_PATTERN=":"
 
+# Detect fd command - Ubuntu/Debian use 'fdfind', others use 'fd'
+typeset -h _FORGE_FD_CMD="$(command -v fdfind 2>/dev/null || command -v fd 2>/dev/null || echo 'fd')"
+
 # Style tagged files
 ZSH_HIGHLIGHT_PATTERNS+=('@\[[^]]#\]' 'fg=cyan,bold')
 
@@ -29,10 +32,8 @@ function _forge_fzf() {
 # Helper function to print operating agent messages with consistent formatting
 function _forge_print_agent_message() {
     local agent_name="${1:-${FORGE_ACTIVE_AGENT}}"
-    echo "\033[33m⏺\033[0m \033[90m[$(date '+%H:%M:%S')] \033[1;37m${agent_name:u}\033[0m \033[90mis now active\033[0m"
+    echo "\033[33m⏺\033[0m \033[90m[$(date '+%H:%M:%S')] \033[1;37m${agent_name:u}\033[0m \033[90mis now the active agent\033[0m"
 }
-
-
 
 # Store conversation ID in a temporary variable (local to plugin)
 export FORGE_CONVERSATION_ID=""
@@ -47,9 +48,9 @@ function forge-completion() {
         local filter_text="${current_word#@}"
         local selected
         if [[ -n "$filter_text" ]]; then
-            selected=$(fd --type f --hidden --exclude .git | _forge_fzf --query "$filter_text")
+            selected=$($_FORGE_FD_CMD --type f --hidden --exclude .git | _forge_fzf --query "$filter_text")
         else
-            selected=$(fd --type f --hidden --exclude .git | _forge_fzf)
+            selected=$($_FORGE_FD_CMD --type f --hidden --exclude .git | _forge_fzf)
         fi
         
         if [[ -n "$selected" ]]; then
@@ -140,7 +141,20 @@ function forge-accept-line() {
         zle reset-prompt
         return 0
     fi
-
+    
+    # Handle info command specially
+    if [[ "$user_action" == "info" || "$user_action" == "i" ]]; then
+        echo
+        
+        # Run forge info
+        $_FORGE_BIN info
+        
+        BUFFER=""
+        CURSOR=${#BUFFER}
+        zle reset-prompt
+        return 0
+    fi
+    
     # Check if input_text is empty - just set the active agent
     if [[ -z "$input_text" ]]; then
         echo
