@@ -104,6 +104,96 @@ impl MarkdownRenderer {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use std::io::Cursor;
+
+    use pretty_assertions::assert_eq;
+    use strip_ansi_escapes::strip_str;
+
+    use super::*;
+
+    #[test]
+    fn test_render_plain_text() {
+        let fixture = MarkdownRenderer::new(MadSkin::default(), 80);
+        let actual = fixture.render("Hello world");
+        let expected = fixture.skin.text("Hello world", Some(80)).to_string();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_render_code_block() {
+        let fixture = MarkdownRenderer::new(MadSkin::default(), 80);
+        let actual = fixture.render("```\nfn main() {}\n```");
+        // Since code highlighting is complex, just check it contains the code
+        assert!(actual.contains("fn main() {}"));
+    }
+
+    #[test]
+    fn test_wrap_code_short_lines() {
+        let fixture = "line1\nline2";
+        let actual = MarkdownRenderer::wrap_code(fixture, 80);
+        let expected = "line1\nline2\n";
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_wrap_code_long_line() {
+        let fixture = "a".repeat(100);
+        let actual = MarkdownRenderer::wrap_code(&fixture, 50);
+        let expected = "a".repeat(50) + "\n" + &"a".repeat(50) + "\n";
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_markdown_writer_add_chunk_and_flush() {
+        let renderer = MarkdownRenderer::new(MadSkin::default(), 80);
+        let writer = Cursor::new(Vec::new());
+        let mut fixture = MarkdownWriter::new(renderer, writer);
+        fixture.add_chunk("Hello").unwrap();
+        let actual = fixture.flush().unwrap();
+        assert!(actual.is_some());
+        assert!(actual.unwrap().contains("Hello"));
+    }
+
+    #[test]
+    fn test_markdown_writer_long_text_chunk_by_chunk() {
+        let renderer = MarkdownRenderer::new(MadSkin::default(), 80);
+        let writer = Cursor::new(Vec::new());
+        let mut fixture = MarkdownWriter::new(renderer, writer);
+
+        let long_text = r#"# Header
+
+This is a long paragraph with multiple sentences. It contains various types of content including some code examples.
+
+```rust
+fn main() {
+    println!("Hello, world!");
+    let x = 42;
+    println!("The answer is {}", x);
+}
+```
+
+And some more text after the code block."#;
+
+        // Split into chunks and add with spaces
+        let chunks = long_text.split_whitespace().collect::<Vec<_>>();
+        for chunk in chunks {
+            fixture.add_chunk(&format!("{} ", chunk)).unwrap();
+        }
+
+        let actual = fixture.flush().unwrap();
+        assert!(actual.is_some());
+        let output = actual.unwrap();
+        // Remove ANSI codes for easier testing
+        let clean_output = strip_str(&output);
+        assert!(clean_output.contains("Header"));
+        assert!(clean_output.contains("println!"));
+        assert!(clean_output.contains("Hello, world!"));
+        assert!(clean_output.contains("more text"));
+    }
+}
+
 pub struct MarkdownWriter<W: io::Write> {
     buffer: String,
     renderer: MarkdownRenderer,
