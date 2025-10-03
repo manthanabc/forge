@@ -74,7 +74,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
     /// Displays banner only if user is in interactive mode.
     fn display_banner(&self) -> Result<()> {
         if self.cli.is_interactive() {
-            banner::display()?;
+            banner::display(false)?;
         }
         Ok(())
     }
@@ -385,6 +385,10 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 self.on_show_commands().await?;
                 return Ok(());
             }
+            TopLevelCommand::ShowBanner => {
+                banner::display(true)?;
+                return Ok(());
+            }
             TopLevelCommand::Config(config_group) => {
                 let config_manager = ConfigManager::new(self.api.clone());
                 config_manager
@@ -392,11 +396,107 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                     .await?;
                 return Ok(());
             }
+
+            TopLevelCommand::Session(session_group) => {
+                self.handle_session_command(session_group).await?;
+                return Ok(());
+            }
         }
         Ok(())
     }
 
-    /// Lists all the agents
+    async fn handle_session_command(
+        &mut self,
+        session_group: crate::cli::SessionCommandGroup,
+    ) -> anyhow::Result<()> {
+        use forge_domain::ConversationId;
+
+        use crate::cli::SessionCommand;
+
+        // Handle list command
+        if session_group.list {
+            self.on_show_conversations().await?;
+            return Ok(());
+        }
+
+        // For all other commands, id is required
+        let id_str = session_group.id.ok_or_else(|| {
+            anyhow::anyhow!(
+                "Error: --id is required for this command. Use 'forge session --list' to see available conversations."
+            )
+        })?;
+
+        // Parse conversation ID from the string
+        let conversation_id = ConversationId::parse(&id_str)
+            .context(format!("Invalid conversation ID: {}", id_str))?;
+
+        // Validate that the conversation exists
+        self.validate_session_exists(&conversation_id).await?;
+
+        match session_group.command {
+            Some(SessionCommand::Dump(dump_args)) => {
+                // Set the conversation ID temporarily to dump it
+                let original_id = self.state.conversation_id;
+                self.state.conversation_id = Some(conversation_id);
+
+                self.spinner.start(Some("Dumping"))?;
+                self.on_dump(dump_args.format).await?;
+
+                // Restore original conversation ID
+                self.state.conversation_id = original_id;
+            }
+            Some(SessionCommand::Compact) => {
+                // Set the conversation ID temporarily to compact it
+                let original_id = self.state.conversation_id;
+                self.state.conversation_id = Some(conversation_id);
+
+                self.spinner.start(Some("Compacting"))?;
+                self.on_compaction().await?;
+
+                // Restore original conversation ID
+                self.state.conversation_id = original_id;
+            }
+            Some(SessionCommand::Retry) => {
+                // Set the conversation ID and retry last message
+                let original_id = self.state.conversation_id;
+                self.state.conversation_id = Some(conversation_id);
+
+                self.spinner.start(None)?;
+                self.on_message(None).await?;
+
+                // Restore original conversation ID
+                self.state.conversation_id = original_id;
+            }
+            None => {
+                // Resume session - set conversation ID and enter interactive mode
+                self.state.conversation_id = Some(conversation_id);
+                self.writeln_title(TitleFormat::info(format!(
+                    "Resumed conversation: {}",
+                    id_str
+                )))?;
+                // Interactive mode will be handled by the main loop
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn validate_session_exists(
+        &self,
+        conversation_id: &ConversationId,
+    ) -> anyhow::Result<()> {
+        let conversation = self.api.conversation(conversation_id).await?;
+
+        if conversation.is_none() {
+            anyhow::bail!(
+                "Conversation '{}' not found. Use 'forge session list' to see available conversations.",
+                conversation_id
+            );
+        }
+
+        Ok(())
+    }
+
     async fn on_show_agents(&self) -> anyhow::Result<()> {
         let agents = self.api.get_agents().await?;
 
@@ -502,7 +602,20 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             ("info".to_string(), "Print session information".to_string()),
             ("provider".to_string(), "Switch the providers".to_string()),
             ("model".to_string(), "Switch the models".to_string()),
-            ("reset".to_string(), "Reset current session".to_string()),
+            ("new".to_string(), "Start new conversation".to_string()),
+            (
+                "dump".to_string(),
+                "Save conversation as JSON or HTML (use /dump html for HTML format)".to_string(),
+            ),
+            (
+                "conversation".to_string(),
+                "List all conversations for the active workspace".to_string(),
+            ),
+            ("retry".to_string(), "Retry the last command".to_string()),
+            (
+                "compact".to_string(),
+                "Compact the conversation context".to_string(),
+            ),
         ];
 
         // Add alias commands
@@ -605,6 +718,49 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
         if let Some(conversation) = ConversationSelector::select_conversation(&conversations)? {
             self.state.conversation_id = Some(conversation.id);
         }
+        Ok(())
+    }
+
+    async fn on_show_conversations(&mut self) -> anyhow::Result<()> {
+        let conversations = self
+            .api
+            .list_conversations(Some(MAX_CONVERSATIONS_TO_SHOW))
+            .await?;
+
+        if conversations.is_empty() {
+            return Ok(());
+        }
+
+        // Format conversations as 3-column output: <id> <title> <time_ago>
+        let items: Vec<(String, String, String)> = conversations
+            .into_iter()
+            .filter(|conv| conv.title.is_some() && conv.context.is_some())
+            .map(|conv| {
+                let title = conv.title.as_deref().unwrap();
+                let title = if title.len() > 30 {
+                    format!("{}...", &title[..30])
+                } else {
+                    title.to_string()
+                };
+
+                // Format time using humantime library (same as conversation_selector.rs)
+                let duration = chrono::Utc::now().signed_duration_since(
+                    conv.metadata.updated_at.unwrap_or(conv.metadata.created_at),
+                );
+                let duration =
+                    std::time::Duration::from_secs((duration.num_minutes() * 60).max(0) as u64);
+                let time_ago = if duration.is_zero() {
+                    "now".to_string()
+                } else {
+                    format!("{} ago", humantime::format_duration(duration))
+                };
+
+                (title.to_string(), time_ago, conv.id.to_string())
+            })
+            .collect();
+
+        format_columns(items);
+
         Ok(())
     }
 
@@ -814,6 +970,10 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             .into_iter()
             .map(CliProvider)
             .collect::<Vec<_>>();
+
+        if providers.is_empty() {
+            return Err(anyhow::anyhow!("No AI provider API keys configured"));
+        }
 
         // Sort the providers by their display names in ascending order
         providers.sort_by_key(|a| a.to_string());

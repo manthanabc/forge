@@ -61,6 +61,32 @@ function _forge_select_and_set_config() {
     )
 }
 
+
+# Helper function to handle session commands that require an active conversation
+function _forge_handle_session_command() {
+    local subcommand="$1"
+    shift  # Remove first argument, remaining args become extra parameters
+    
+    echo
+    
+    # Check if FORGE_CONVERSATION_ID is set
+    if [[ -z "$FORGE_CONVERSATION_ID" ]]; then
+        echo "\033[31m✗\033[0m No active conversation. Start a conversation first or use :list to see existing ones"
+        BUFFER=""
+        CURSOR=${#BUFFER}
+        zle reset-prompt
+        return 0
+    fi
+    
+    # Execute the session command with conversation ID and any extra arguments
+    $_FORGE_BIN session --id "$FORGE_CONVERSATION_ID" "$subcommand" "$@"
+    
+    BUFFER=""
+    CURSOR=${#BUFFER}
+    zle reset-prompt
+    return 0
+}
+
 # Store conversation ID in a temporary variable (local to plugin)
 export FORGE_CONVERSATION_ID=""
 export FORGE_ACTIVE_AGENT="forge"
@@ -156,12 +182,11 @@ function forge-accept-line() {
         user_action="muse"
     fi
     
-    # Handle reset command specially
-    if [[ "$user_action" == "reset" || "$user_action" == "r" ]]; then
+    # Handle new command specially
+    if [[ "$user_action" == "new" || "$user_action" == "n" ]]; then
         echo
-        if [[ -n "$FORGE_CONVERSATION_ID" ]]; then
-            echo "\033[36m⏺\033[0m \033[90m[$(date '+%H:%M:%S')] Reset ${FORGE_CONVERSATION_ID}\033[0m"
-        fi
+        # Show banner
+        $_FORGE_BIN show-banner
         
         _forge_print_agent_message "FORGE"
         
@@ -179,6 +204,70 @@ function forge-accept-line() {
         
         # Run forge info
         $_FORGE_BIN info
+        
+        BUFFER=""
+        CURSOR=${#BUFFER}
+        zle reset-prompt
+        return 0
+    fi
+
+    
+    # Handle dump command specially  
+    if [[ "$user_action" == "dump" ]]; then
+        # Pass "html" as extra argument if specified, otherwise pass nothing
+        if [[ "$input_text" == "html" ]]; then
+            _forge_handle_session_command "dump" "html"
+        else
+            _forge_handle_session_command "dump"
+        fi
+        return 0
+    fi
+    
+    # Handle compact command specially
+    if [[ "$user_action" == "compact" ]]; then
+        _forge_handle_session_command "compact"
+        return 0
+    fi
+    
+    # Handle retry command specially
+    if [[ "$user_action" == "retry" ]]; then
+        _forge_handle_session_command "retry"
+        return 0
+    fi
+    
+    # Handle list/conversations command specially
+    if [[ "$user_action" == "conversation" ]]; then
+        echo
+        
+        # Get conversations list
+        local conversations_output
+        conversations_output=$($_FORGE_BIN session --list 2>/dev/null)
+        
+        if [[ -n "$conversations_output" ]]; then
+            # Get current conversation ID if set
+            local current_id="$FORGE_CONVERSATION_ID"
+            
+            # Create prompt with current conversation
+            local prompt_text="Conversation ❯ "
+            if [[ -n "$current_id" ]]; then
+                prompt_text="Conversation [Current: ${current_id}] ❯ "
+            fi
+            
+            local selected_conversation
+            selected_conversation=$(echo "$conversations_output" | _forge_fzf --prompt="$prompt_text")
+            
+            if [[ -n "$selected_conversation" ]]; then
+                # Strip ANSI codes first, then extract the last field (UUID)
+                local conversation_id=$(echo "$selected_conversation" | sed 's/\x1b\[[0-9;]*m//g' | sed 's/\x1b\[K//g' | awk '{print $NF}' | tr -d '\n')
+                
+                # Set the selected conversation as active (in parent shell)
+                FORGE_CONVERSATION_ID="$conversation_id"
+                
+                echo "\033[36m⏺\033[0m \033[90m[$(date '+%H:%M:%S')] Switched to conversation \033[1m${conversation_id}\033[0m"
+            fi
+        else
+            echo "\033[31m✗\033[0m No conversations found"
+        fi
         
         BUFFER=""
         CURSOR=${#BUFFER}
