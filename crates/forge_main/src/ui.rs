@@ -15,9 +15,6 @@ use forge_fs::ForgeFS;
 use forge_spinner::{ForgeSpinner, SpinnerManager, StdoutWriter, WriterWrapper};
 use forge_tracker::ToolCallPayload;
 use merge::Merge;
-use termimad::crossterm::style::{Attribute, Color};
-use termimad::crossterm::terminal;
-use termimad::{CompoundStyle, LineStyle, MadSkin};
 use tokio_stream::StreamExt;
 
 use crate::cli::{Cli, McpCommand, TopLevelCommand, Transport};
@@ -132,23 +129,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
         let command = Arc::new(ForgeCommandManager::default());
         let writer = Arc::new(std::sync::Mutex::new(WriterWrapper::new(StdoutWriter)));
         let spinner = SpinnerManager::new(writer.clone(), ForgeSpinner::new());
-        let markdown = {
-            let (width, _) = terminal::size().unwrap_or((80, 24));
-            let mut skin = MadSkin::default();
-            let compound_style =
-                CompoundStyle::new(Some(Color::Cyan), None, Attribute::Bold.into());
-            skin.inline_code = compound_style.clone();
-
-            let codeblock_style = CompoundStyle::new(None, None, Default::default());
-            skin.code_block = LineStyle::new(codeblock_style, Default::default());
-
-            let mut strikethrough_style = CompoundStyle::with_attr(Attribute::CrossedOut);
-            strikethrough_style.add_attr(Attribute::Dim);
-            skin.strikeout = strikethrough_style;
-
-            let renderer = MarkdownRenderer::new(skin, (width as usize).saturating_sub(1));
-            MarkdownWriter::new(renderer)
-        };
+        let markdown = MarkdownWriter::new(MarkdownRenderer::default());
         Ok(Self {
             state: Default::default(),
             api,

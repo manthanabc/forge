@@ -3,7 +3,9 @@ use syntect::easy::HighlightLines;
 use syntect::highlighting::ThemeSet;
 use syntect::parsing::SyntaxSet;
 use syntect::util::{LinesWithEndings, as_24_bit_terminal_escaped};
-use termimad::MadSkin;
+use termimad::crossterm::style::{Attribute, Color};
+use termimad::crossterm::terminal;
+use termimad::{CompoundStyle, LineStyle, MadSkin};
 
 #[derive(Debug)]
 pub enum Segment {
@@ -16,6 +18,24 @@ pub struct MarkdownRenderer {
     ss: SyntaxSet,
     theme: syntect::highlighting::Theme,
     width: usize,
+}
+
+impl Default for MarkdownRenderer {
+    fn default() -> Self {
+        let (width, _) = terminal::size().unwrap_or((80, 24));
+        let mut skin = MadSkin::default();
+        let compound_style = CompoundStyle::new(Some(Color::Cyan), None, Attribute::Bold.into());
+        skin.inline_code = compound_style.clone();
+
+        let codeblock_style = CompoundStyle::new(None, None, Default::default());
+        skin.code_block = LineStyle::new(codeblock_style, Default::default());
+
+        let mut strikethrough_style = CompoundStyle::with_attr(Attribute::CrossedOut);
+        strikethrough_style.add_attr(Attribute::Dim);
+        skin.strikeout = strikethrough_style;
+
+        Self::new(skin, (width as usize).saturating_sub(1))
+    }
 }
 
 impl MarkdownRenderer {
