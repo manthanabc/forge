@@ -74,18 +74,12 @@ impl MarkdownRenderer {
                 segments.push(Segment::Text(text[last_end..start].to_string()));
             }
             let lang = cap.get(1).map(|m| m.as_str()).unwrap_or("txt");
-            let ext = match lang {
-                "rust" => "rs",
-                "javascript" => "js",
-                "python" => "py",
-                _ => lang,
-            };
 
             let code = cap.get(2).unwrap().as_str();
             let wrapped_code = Self::wrap_code(code, self.width);
             let syntax = self
                 .ss
-                .find_syntax_by_extension(ext)
+                .find_syntax_by_token(lang)
                 .unwrap_or_else(|| self.ss.find_syntax_plain_text());
 
             let mut h = HighlightLines::new(syntax, &self.theme);
