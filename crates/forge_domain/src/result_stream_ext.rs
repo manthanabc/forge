@@ -8,14 +8,15 @@ use crate::{
     ToolCallFull, ToolCallPart, Usage,
 };
 
+/// Returns if the candidate could potentially contain a tool call
 fn is_potentially_tool_call(content: &str) -> bool {
-    if content.contains("<forge") {
+    if content.contains("<forge_") {
         return true;
     }
 
     if let Some(last_lt) = content.rfind('<') {
-        let after = &content[last_lt + 1..];
-        "forge".starts_with(after)
+        let after = &content[last_lt..];
+        "<forge".starts_with(after)
     } else {
         false
     }
@@ -98,10 +99,11 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
                         let cleaned_content =
                             remove_tag_with_prefix(content_part.as_str(), "forge_");
                         let prefixed_content = if last_was_reasoning {
-                            format!("\n{}", cleaned_content)
+                            format!("\n{}{}", content_buffered, cleaned_content)
                         } else {
-                            cleaned_content
+                            format!("{}{}", content_buffered, cleaned_content)
                         };
+                        content_buffered.clear();
 
                         let _ = sender
                             .send(Ok(ChatResponse::TaskMessage {
@@ -835,6 +837,37 @@ mod tests {
         {
             assert!(content.starts_with("\n"));
             assert!(content.contains("tool content"));
+        } else {
+            panic!("Expected TaskMessage with Markdown content");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_streaming_followed_by_buffered_content() {
+        // Fixture: Reasoning message followed by content that triggers buffering
+        let (tx, mut rx) = mpsc::channel(10);
+        let messages = vec![
+            Ok(ChatCompletionMessage::default().reasoning(Content::part("Analyzing the request"))),
+            Ok(ChatCompletionMessage::default().content(Content::part("<folse_call>"))),
+            Ok(ChatCompletionMessage::default().content(Content::part("tool content"))),
+        ];
+
+        let result_stream: BoxStream<ChatCompletionMessage, anyhow::Error> =
+            Box::pin(tokio_stream::iter(messages));
+
+        // Actual: Convert stream with sender
+        let _actual = result_stream.into_full(false, Some(tx)).await.unwrap();
+
+        // Collect sent messages
+        let mut sent_messages = Vec::new();
+        while let Ok(msg) = rx.try_recv() {
+            sent_messages.push(msg);
+        }
+        if let Ok(ChatResponse::TaskMessage { content: ChatResponseContent::Markdown(content) }) =
+            &sent_messages[1]
+        {
+            assert!(content.starts_with("\n"));
+            assert!(content.contains("<folse_call>"));
         } else {
             panic!("Expected TaskMessage with Markdown content");
         }
