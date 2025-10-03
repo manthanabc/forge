@@ -169,6 +169,7 @@ impl ChatCompletionMessage {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ChatCompletionMessageFull {
     pub content: String,
+    pub reasoning: Option<String>,
     pub tool_calls: Vec<ToolCallFull>,
     pub reasoning_details: Option<Vec<ReasoningFull>>,
     pub usage: Usage,

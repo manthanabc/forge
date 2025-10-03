@@ -405,6 +405,7 @@ impl<S: AgentService> Orchestrator<S> {
                     tool_calls,
                     content,
                     usage,
+                    reasoning: _,
                     reasoning_details,
                     finish_reason,
                 },

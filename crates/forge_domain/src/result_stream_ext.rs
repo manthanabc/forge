@@ -155,6 +155,14 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
             .collect::<Vec<_>>()
             .join("");
 
+        // Collect reasoning tokens from all messages
+        let reasoning = messages
+            .iter()
+            .flat_map(|m| m.reasoning.iter())
+            .map(|content| content.as_str())
+            .collect::<Vec<_>>()
+            .join("");
+
         #[allow(clippy::collapsible_if)]
         if tool_interrupted && !content.trim().ends_with("</forge_tool_call>") {
             if let Some((i, right)) = content.rmatch_indices("</forge_tool_call>").next() {
@@ -231,6 +239,7 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
             content,
             tool_calls,
             usage,
+            reasoning: (!reasoning.is_empty()).then_some(reasoning),
             reasoning_details: (!total_reasoning_details.is_empty())
                 .then_some(total_reasoning_details),
             finish_reason,
@@ -289,6 +298,7 @@ mod tests {
                 cached_tokens: TokenCount::Actual(0),
                 cost: None,
             },
+            reasoning: None,
             reasoning_details: None,
             finish_reason: None,
         };
@@ -320,6 +330,7 @@ mod tests {
             content: "Processing...".to_string(),
             tool_calls: vec![tool_call],
             usage: Usage::default(),
+            reasoning: None,
             reasoning_details: None,
             finish_reason: None,
         };
@@ -382,6 +393,7 @@ mod tests {
             content: "Hello world!".to_string(),
             tool_calls: vec![],
             usage: Usage::default(),
+            reasoning: Some("First reasoning: thinking deeply about this...".to_string()),
             reasoning_details: None,
             finish_reason: None,
         };
@@ -432,6 +444,7 @@ mod tests {
             content: "Processing... complete".to_string(),
             tool_calls: vec![],
             usage: Usage::default(),
+            reasoning: None,
             reasoning_details: Some(expected_reasoning_details),
             finish_reason: None,
         };
@@ -460,6 +473,7 @@ mod tests {
             content: "Hello world".to_string(),
             tool_calls: vec![],
             usage: Usage::default(),
+            reasoning: None,
             reasoning_details: None,
             finish_reason: None,
         };
@@ -546,6 +560,7 @@ mod tests {
                 cached_tokens: TokenCount::Actual(0),
                 cost: None,
             },
+            reasoning: None,
             reasoning_details: None,
             finish_reason: None,
         };
@@ -586,6 +601,7 @@ mod tests {
                 cached_tokens: TokenCount::Actual(0),
                 cost: None,
             },
+            reasoning: None,
             reasoning_details: None,
             finish_reason: None,
         };
@@ -623,6 +639,7 @@ mod tests {
             content: "Processing... continue done".to_string(),
             tool_calls: vec![],
             usage: Usage::default(),
+            reasoning: None,
             reasoning_details: None,
             finish_reason: Some(FinishReason::Stop), /* Should be from the last message with a
                                                       * finish reason */
@@ -651,6 +668,7 @@ mod tests {
             content: "I'll call a tool".to_string(),
             tool_calls: vec![],
             usage: Usage::default(),
+            reasoning: None,
             reasoning_details: None,
             finish_reason: Some(FinishReason::ToolCalls),
         };
@@ -677,6 +695,7 @@ mod tests {
             content: "Hello world".to_string(),
             tool_calls: vec![],
             usage: Usage::default(),
+            reasoning: None,
             reasoning_details: None,
             finish_reason: None,
         };
@@ -766,6 +785,7 @@ mod tests {
             content: "".to_string(),
             tool_calls: vec![],
             usage: Usage::default(),
+            reasoning: None,
             reasoning_details: None,
             finish_reason: Some(FinishReason::Stop),
         };
@@ -797,6 +817,7 @@ mod tests {
             content: "".to_string(),
             tool_calls: vec![tool_call],
             usage: Usage::default(),
+            reasoning: None,
             reasoning_details: None,
             finish_reason: None,
         };
