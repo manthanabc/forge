@@ -130,7 +130,12 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
 
         // If buffering occurred, send the buffered cleaned content at the end
         if buffering_started && let Some(ref sender) = sender {
-            let cleaned_content = remove_tag_with_prefix(content_buffered.as_str(), "forge_");
+            let mut cleaned_content = remove_tag_with_prefix(content_buffered.as_str(), "forge_");
+
+            if last_was_reasoning {
+                cleaned_content.insert_str(0, "\n");
+            }
+
             if !cleaned_content.is_empty() {
                 let _ = sender
                     .send(Ok(ChatResponse::TaskMessage {
