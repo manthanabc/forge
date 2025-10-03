@@ -133,7 +133,7 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
             let mut cleaned_content = remove_tag_with_prefix(content_buffered.as_str(), "forge_");
 
             if last_was_reasoning {
-                cleaned_content.insert_str(0, "\n");
+                cleaned_content.insert(0, '\n');
             }
 
             if !cleaned_content.is_empty() {
@@ -239,6 +239,7 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
 #[cfg(test)]
 mod tests {
     use pretty_assertions::assert_eq;
+    use tokio::sync::mpsc;
 
     use super::*;
     use crate::{
@@ -799,5 +800,121 @@ mod tests {
         };
 
         assert_eq!(actual, expected);
+    }
+
+    #[tokio::test]
+    async fn test_streaming_reasoning_followed_by_buffered_content() {
+        // Fixture: Reasoning message followed by content that triggers buffering
+        let (tx, mut rx) = mpsc::channel(10);
+        let messages = vec![
+            Ok(ChatCompletionMessage::default().reasoning(Content::part("Analyzing the request"))),
+            Ok(ChatCompletionMessage::default().content(Content::part("<forge_tool_call>"))),
+            Ok(ChatCompletionMessage::default().content(Content::part("tool content"))),
+        ];
+
+        let result_stream: BoxStream<ChatCompletionMessage, anyhow::Error> =
+            Box::pin(tokio_stream::iter(messages));
+
+        // Actual: Convert stream with sender
+        let _actual = result_stream.into_full(false, Some(tx)).await.unwrap();
+
+        // Collect sent messages
+        let mut sent_messages = Vec::new();
+        while let Ok(msg) = rx.try_recv() {
+            sent_messages.push(msg);
+        }
+
+        // Expected: Reasoning sent first, then buffered content with newline prefix
+        assert_eq!(sent_messages.len(), 2);
+        assert!(matches!(
+            sent_messages[0],
+            Ok(ChatResponse::TaskReasoning { .. })
+        ));
+        if let Ok(ChatResponse::TaskMessage { content: ChatResponseContent::Markdown(content) }) =
+            &sent_messages[1]
+        {
+            assert!(content.starts_with("\n"));
+            assert!(content.contains("tool content"));
+        } else {
+            panic!("Expected TaskMessage with Markdown content");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_streaming_reasoning_followed_by_immediate_content() {
+        // Fixture: Reasoning message followed by immediate content (no buffering)
+        let (tx, mut rx) = mpsc::channel(10);
+        let messages = vec![
+            Ok(ChatCompletionMessage::default()
+                .reasoning(Content::part("Thinking about response"))),
+            Ok(ChatCompletionMessage::default().content(Content::part("Hello world"))),
+        ];
+
+        let result_stream: BoxStream<ChatCompletionMessage, anyhow::Error> =
+            Box::pin(tokio_stream::iter(messages));
+
+        // Actual: Convert stream with sender
+        let _ = result_stream.into_full(false, Some(tx)).await.unwrap();
+
+        // Collect sent messages
+        let mut sent_messages = Vec::new();
+        while let Ok(msg) = rx.try_recv() {
+            sent_messages.push(msg);
+        }
+
+        // Expected: Reasoning sent first, then content with newline prefix
+        assert_eq!(sent_messages.len(), 2);
+        assert!(matches!(
+            sent_messages[0],
+            Ok(ChatResponse::TaskReasoning { .. })
+        ));
+        if let Ok(ChatResponse::TaskMessage { content: ChatResponseContent::Markdown(content) }) =
+            &sent_messages[1]
+        {
+            assert_eq!(content, "\nHello world");
+        } else {
+            panic!("Expected TaskMessage with Markdown content");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_streaming_buffering_logic_with_reasoning_state() {
+        // Fixture: Reasoning, then content that triggers buffering, then more content
+        // during buffering
+        let (tx, mut rx) = mpsc::channel(10);
+        let messages = vec![
+            Ok(ChatCompletionMessage::default().reasoning(Content::part("Planning tool use"))),
+            Ok(ChatCompletionMessage::default().content(Content::part("<forge_"))), /* Triggers buffering */
+            Ok(ChatCompletionMessage::default().content(Content::part("tool>content"))), /* Still buffering */
+            Ok(ChatCompletionMessage::default().content(Content::part(" and more"))), /* Still buffering */
+        ];
+
+        let result_stream: BoxStream<ChatCompletionMessage, anyhow::Error> =
+            Box::pin(tokio_stream::iter(messages));
+
+        // Actual: Convert stream with sender
+        let _ = result_stream.into_full(false, Some(tx)).await.unwrap();
+
+        // Collect sent messages
+        let mut sent_messages = Vec::new();
+        while let Ok(msg) = rx.try_recv() {
+            sent_messages.push(msg);
+        }
+
+        // Expected: Reasoning sent first, then buffered content at end with newline
+        // prefix
+        assert_eq!(sent_messages.len(), 2);
+        assert!(matches!(
+            sent_messages[0],
+            Ok(ChatResponse::TaskReasoning { .. })
+        ));
+        if let Ok(ChatResponse::TaskMessage { content: ChatResponseContent::Markdown(content) }) =
+            &sent_messages[1]
+        {
+            assert!(content.starts_with("\n"));
+            assert!(content.contains("<forge_tool>content and more"));
+        } else {
+            panic!("Expected TaskMessage for buffered content");
+        }
     }
 }
