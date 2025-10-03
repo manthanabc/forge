@@ -12,7 +12,7 @@ use forge_app::utils::truncate_key;
 use forge_display::{MarkdownRenderer, MarkdownWriter};
 use forge_domain::{ChatResponseContent, McpConfig, McpServerConfig, Scope, TitleFormat};
 use forge_fs::ForgeFS;
-use forge_spinner::{ArcWriter, ForgeSpinner, SpinnerManager, StdoutWriter, WriterWrapper};
+use forge_spinner::{ForgeSpinner, SpinnerManager, StdoutWriter, WriterWrapper};
 use forge_tracker::ToolCallPayload;
 use merge::Merge;
 use termimad::crossterm::style::{Attribute, Color};
@@ -39,7 +39,7 @@ use crate::{TRACKER, banner, tracker};
 const MAX_CONVERSATIONS_TO_SHOW: usize = 20;
 
 pub struct UI<A, F: Fn() -> A> {
-    markdown: MarkdownWriter<ArcWriter<WriterWrapper<StdoutWriter>>>,
+    markdown: MarkdownWriter,
     state: UIState,
     api: Arc<F::Output>,
     new_api: Arc<F>,
@@ -132,7 +132,6 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
         let command = Arc::new(ForgeCommandManager::default());
         let writer = Arc::new(std::sync::Mutex::new(WriterWrapper::new(StdoutWriter)));
         let spinner = SpinnerManager::new(writer.clone(), ForgeSpinner::new());
-        let writer = spinner.writer();
         let markdown = {
             let (width, _) = terminal::size().unwrap_or((80, 24));
             let mut skin = MadSkin::default();
@@ -148,7 +147,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             skin.strikeout = strikethrough_style;
 
             let renderer = MarkdownRenderer::new(skin, (width as usize).saturating_sub(1));
-            MarkdownWriter::new(renderer, ArcWriter(writer))
+            MarkdownWriter::new(renderer)
         };
         Ok(Self {
             state: Default::default(),
@@ -1186,7 +1185,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 ChatResponseContent::PlainText(text) => self.writeln(text)?,
                 ChatResponseContent::Markdown(text) => {
                     self.spinner.stop(None)?;
-                    self.markdown.add_chunk(&text)?;
+                    self.markdown.add_chunk(&text);
                 }
             },
             ChatResponse::ToolCallStart(_) => {

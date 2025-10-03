@@ -1,5 +1,3 @@
-use std::io;
-
 use lazy_regex::regex;
 use syntect::easy::HighlightLines;
 use syntect::highlighting::ThemeSet;
@@ -49,6 +47,7 @@ impl MarkdownRenderer {
         let re = regex!(r"(?ms)^```(\w+)?\n(.*?)(^```|\z)");
         let mut segments = vec![];
         let mut last_end = 0;
+
         for cap in re.captures_iter(text) {
             let start = cap.get(0).unwrap().start();
             if start > last_end {
@@ -61,19 +60,23 @@ impl MarkdownRenderer {
                 "python" => "py",
                 _ => lang,
             };
+
             let code = cap.get(2).unwrap().as_str();
             let wrapped_code = Self::wrap_code(code, self.width);
             let syntax = self
                 .ss
                 .find_syntax_by_extension(ext)
                 .unwrap_or_else(|| self.ss.find_syntax_plain_text());
+
             let mut h = HighlightLines::new(syntax, &self.theme);
             let mut highlighted = String::new();
+
             for line in LinesWithEndings::from(&wrapped_code) {
                 let ranges: Vec<(syntect::highlighting::Style, &str)> =
                     h.highlight_line(line, &self.ss).unwrap();
                 highlighted.push_str(&as_24_bit_terminal_escaped(&ranges[..], false));
             }
+
             highlighted.push_str("\x1b[0m");
             segments.push(Segment::Code(highlighted));
             last_end = cap.get(0).unwrap().end();
@@ -106,8 +109,6 @@ impl MarkdownRenderer {
 
 #[cfg(test)]
 mod tests {
-    use std::io::Cursor;
-
     use pretty_assertions::assert_eq;
     use strip_ansi_escapes::strip_str;
 
@@ -148,10 +149,9 @@ mod tests {
     #[test]
     fn test_markdown_writer_add_chunk_and_flush() {
         let renderer = MarkdownRenderer::new(MadSkin::default(), 80);
-        let writer = Cursor::new(Vec::new());
-        let mut fixture = MarkdownWriter::new(renderer, writer);
-        fixture.add_chunk("Hello").unwrap();
-        let actual = fixture.flush().unwrap();
+        let mut fixture = MarkdownWriter::new(renderer);
+        fixture.add_chunk("Hello");
+        let actual = fixture.flush();
         assert!(actual.is_some());
         assert!(actual.unwrap().contains("Hello"));
     }
@@ -159,8 +159,7 @@ mod tests {
     #[test]
     fn test_markdown_writer_long_text_chunk_by_chunk() {
         let renderer = MarkdownRenderer::new(MadSkin::default(), 80);
-        let writer = Cursor::new(Vec::new());
-        let mut fixture = MarkdownWriter::new(renderer, writer);
+        let mut fixture = MarkdownWriter::new(renderer);
 
         let long_text = r#"# Header
 
@@ -179,10 +178,10 @@ And some more text after the code block."#;
         // Split into chunks and add with spaces
         let chunks = long_text.split_whitespace().collect::<Vec<_>>();
         for chunk in chunks {
-            fixture.add_chunk(&format!("{} ", chunk)).unwrap();
+            fixture.add_chunk(&format!("{} ", chunk));
         }
 
-        let actual = fixture.flush().unwrap();
+        let actual = fixture.flush();
         assert!(actual.is_some());
         let output = actual.unwrap();
         // Remove ANSI codes for easier testing
@@ -194,50 +193,46 @@ And some more text after the code block."#;
     }
 }
 
-pub struct MarkdownWriter<W: io::Write> {
+pub struct MarkdownWriter {
     buffer: String,
     renderer: MarkdownRenderer,
     previous_rendered: String,
-    writer: W,
 }
 
-impl<W: io::Write> MarkdownWriter<W> {
-    pub fn new(renderer: MarkdownRenderer, writer: W) -> Self {
+impl MarkdownWriter {
+    pub fn new(renderer: MarkdownRenderer) -> Self {
         Self {
             buffer: String::new(),
             renderer,
             previous_rendered: String::new(),
-            writer,
         }
     }
 
-    pub fn add_chunk(&mut self, chunk: &str) -> io::Result<()> {
+    pub fn add_chunk(&mut self, chunk: &str) {
         self.buffer.push_str(chunk);
 
-        if let Some(rendered) = self.try_render()? {
-            self.stream(&rendered)?;
+        if let Some(rendered) = self.try_render() {
+            self.stream(&rendered);
         }
-
-        Ok(())
     }
 
-    fn try_render(&mut self) -> io::Result<Option<String>> {
+    fn try_render(&mut self) -> Option<String> {
         let result = self.renderer.render(&self.buffer);
-        Ok(Some(result))
+        Some(result)
     }
 
-    pub fn flush(&mut self) -> io::Result<Option<String>> {
+    pub fn flush(&mut self) -> Option<String> {
         if !self.buffer.is_empty() {
             let result = self.renderer.render(&self.buffer);
             self.buffer.clear();
             self.previous_rendered.clear();
-            Ok(Some(result))
+            Some(result)
         } else {
-            Ok(None)
+            None
         }
     }
 
-    pub fn stream(&mut self, content: &str) -> io::Result<()> {
+    pub fn stream(&mut self, content: &str) {
         let rendered_lines: Vec<&str> = content.lines().collect();
         let lines_new: Vec<&str> = rendered_lines;
         let lines_prev: Vec<&str> = self.previous_rendered.lines().collect();
@@ -249,17 +244,13 @@ impl<W: io::Write> MarkdownWriter<W> {
         if common < lines_prev.len() {
             let up_lines = lines_prev.len() - common;
             if up_lines > 0 {
-                self.writer
-                    .write_all(format!("\x1b[{}A", up_lines).as_bytes())?;
+                print!("\x1b[{}A", up_lines);
             }
-            self.writer.write_all(b"\x1b[0J")?;
+            print!("\x1b[0J");
         }
         for line in &lines_new[common..] {
-            self.writer
-                .write_all(format!("{}\x1b[K\n", line).as_bytes())?;
+            println!("{}\x1b[K", line);
         }
-        self.writer.flush()?;
         self.previous_rendered = content.to_string();
-        Ok(())
     }
 }
