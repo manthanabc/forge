@@ -36,7 +36,7 @@ use crate::{TRACKER, banner, tracker};
 const MAX_CONVERSATIONS_TO_SHOW: usize = 20;
 
 pub struct UI<A, F: Fn() -> A> {
-    markdown: MarkdownWriter,
+    markdown: MarkdownWriter<'static>,
     state: UIState,
     api: Arc<F::Output>,
     new_api: Arc<F>,
@@ -129,7 +129,8 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
         let command = Arc::new(ForgeCommandManager::default());
         let writer = Arc::new(std::sync::Mutex::new(WriterWrapper::new(StdoutWriter)));
         let spinner = SpinnerManager::new(writer.clone(), ForgeSpinner::new());
-        let markdown = MarkdownWriter::new(MarkdownRenderer::default());
+        let markdown =
+            MarkdownWriter::new(MarkdownRenderer::default(), Box::new(std::io::stdout()));
         Ok(Self {
             state: Default::default(),
             api,
