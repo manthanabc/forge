@@ -6,8 +6,9 @@ use colored::Colorize;
 use convert_case::{Case, Casing};
 use forge_api::{
     API, AgentId, ChatRequest, ChatResponse, Conversation, ConversationId, Event,
-    InterruptionReason, Model, ModelId, Provider, ToolName, Workflow,
+    InterruptionReason, Model, ModelId, Provider, Workflow,
 };
+use forge_app::ToolResolver;
 use forge_app::utils::truncate_key;
 use forge_display::{MarkdownRenderer, MarkdownWriter};
 use forge_domain::{ChatResponseContent, McpConfig, McpServerConfig, Scope, TitleFormat};
@@ -29,6 +30,7 @@ use crate::prompt::ForgePrompt;
 use crate::select::ForgeSelect;
 use crate::state::UIState;
 use crate::title_display::TitleDisplayExt;
+use crate::tools_display::format_tools;
 use crate::update::on_update;
 use crate::{TRACKER, banner, tracker};
 
@@ -630,13 +632,23 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
         Ok(())
     }
 
-    /// Lists all the tools
-    async fn on_show_tools(&mut self, agent: AgentId) -> anyhow::Result<()> {
+    /// Displays available tools for the current agent
+    async fn on_show_tools(&mut self, agent_id: AgentId) -> anyhow::Result<()> {
         self.spinner.start(Some("Loading"))?;
-        use crate::tools_display::format_tools;
         let all_tools = self.api.tools().await?;
+        let agents = self.api.get_agents().await?;
+        let agent = agents.into_iter().find(|agent| agent.id == agent_id);
+        let agent_tools = if let Some(agent) = agent {
+            let resolver = ToolResolver::new(all_tools.clone().into());
+            resolver
+                .resolve(&agent)
+                .into_iter()
+                .map(|def| def.name.clone())
+                .collect()
+        } else {
+            Vec::new()
+        };
 
-        let agent_tools = self.agent_tools_for_id(&agent).await?;
         let info = format_tools(&agent_tools, &all_tools);
         self.writeln(info)?;
 
@@ -690,24 +702,6 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
     async fn on_zsh_prompt(&self) -> anyhow::Result<()> {
         println!("{}", include_str!("../../../shell-plugin/forge.plugin.zsh"));
         Ok(())
-    }
-
-    async fn agent_tools(&self) -> anyhow::Result<Vec<ToolName>> {
-        let agent_id = self.api.get_operating_agent().await.unwrap_or_default();
-        self.agent_tools_for_id(&agent_id).await
-    }
-
-    async fn agent_tools_for_id(
-        &self,
-        agent_id: &forge_api::AgentId,
-    ) -> anyhow::Result<Vec<ToolName>> {
-        let agents = self.api.get_agents().await?;
-        let agent = agents.into_iter().find(|agent| agent.id == *agent_id);
-        Ok(agent
-            .and_then(|agent| agent.tools.clone())
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>())
     }
 
     async fn list_conversations(&mut self) -> anyhow::Result<()> {
@@ -814,12 +808,9 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 self.writeln(info)?;
             }
             Command::Tools => {
-                self.spinner.start(Some("Loading"))?;
-                use crate::tools_display::format_tools;
-                let all_tools = self.api.tools().await?;
-                let agent_tools = self.agent_tools().await?;
-                let info = format_tools(&agent_tools, &all_tools);
-                self.writeln(info)?;
+                if let Some(agent_id) = self.api.get_operating_agent().await {
+                    self.on_show_tools(agent_id).await?;
+                }
             }
             Command::Update => {
                 on_update(self.api.clone(), None).await;
