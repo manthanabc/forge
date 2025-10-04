@@ -126,7 +126,6 @@ impl MarkdownRenderer {
     }
 }
 
-
 pub struct MarkdownWriter<'a> {
     buffer: String,
     renderer: MarkdownRenderer,
