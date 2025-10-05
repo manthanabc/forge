@@ -310,6 +310,18 @@ mod tests {
     }
 
     #[test]
+    fn test_wrap_code_unicode_no_wrap() {
+        // Test line with multi-byte chars where byte len > char count, but chars <=
+        // width Old code: len()=5 > width=4, attempts wrapping, slices at byte
+        // 4 splitting 'é' (invalid UTF-8) New code: chars().count()=4 <=4, no
+        // wrap needed
+        let fixture = "café"; // 4 chars, 5 bytes
+        let actual = MarkdownRenderer::wrap_code(fixture, 4);
+        let expected = "café\n";
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
     fn test_markdown_writer_add_chunk_and_flush() {
         let renderer = MarkdownRenderer::new(MadSkin::default(), 80, 24);
         let mut fixture = MarkdownWriter::new(renderer, Box::new(std::io::sink()));
