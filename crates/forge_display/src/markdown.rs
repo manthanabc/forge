@@ -109,16 +109,27 @@ impl MarkdownRenderer {
     fn wrap_code(code: &str, width: usize) -> String {
         let mut result = String::new();
         for line in code.lines() {
-            if line.len() <= width {
+            if line.chars().count() <= width {
                 result.push_str(line);
                 result.push('\n');
             } else {
-                let mut start = 0;
-                while start < line.len() {
-                    let end = (start + width).min(line.len());
-                    result.push_str(&line[start..end]);
+                let mut current_line = String::new();
+                let mut char_count = 0;
+                
+                for ch in line.chars() {
+                    if char_count >= width {
+                        result.push_str(&current_line);
+                        result.push('\n');
+                        current_line.clear();
+                        char_count = 0;
+                    }
+                    current_line.push(ch);
+                    char_count += 1;
+                }
+                
+                if !current_line.is_empty() {
+                    result.push_str(&current_line);
                     result.push('\n');
-                    start = end;
                 }
             }
         }
