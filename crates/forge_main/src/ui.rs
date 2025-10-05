@@ -13,7 +13,7 @@ use forge_app::utils::truncate_key;
 use forge_display::{MarkdownRenderer, MarkdownWriter};
 use forge_domain::{ChatResponseContent, McpConfig, McpServerConfig, Scope, TitleFormat};
 use forge_fs::ForgeFS;
-use forge_spinner::{ForgeSpinner, SpinnerManager, StdoutWriter, WriterWrapper};
+use forge_spinner::{ForgeSpinner, SpinnerManager, StdoutWriter};
 use forge_tracker::ToolCallPayload;
 use merge::Merge;
 use tokio_stream::StreamExt;
@@ -129,10 +129,6 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
         let api = Arc::new(f());
         let env = api.environment();
         let command = Arc::new(ForgeCommandManager::default());
-        let writer = Arc::new(std::sync::Mutex::new(WriterWrapper::new(StdoutWriter)));
-        let spinner = SpinnerManager::new(writer.clone(), ForgeSpinner::new());
-        let markdown =
-            MarkdownWriter::new(MarkdownRenderer::default(), Box::new(std::io::stdout()));
         Ok(Self {
             state: Default::default(),
             api,
@@ -140,8 +136,8 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             console: Console::new(env.clone(), command.clone()),
             cli,
             command,
-            spinner,
-            markdown,
+            spinner: SpinnerManager::new(StdoutWriter, ForgeSpinner::new()),
+            markdown: MarkdownWriter::new(MarkdownRenderer::default(), Box::new(std::io::stdout())),
             _guard: forge_tracker::init_tracing(env.log_path(), TRACKER.clone())?,
         })
     }
@@ -1279,13 +1275,14 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             match message {
                 Ok(message) => self.handle_chat_response(message).await?,
                 Err(err) => {
+                    self.spinner.stop(None)?;
                     return Err(err);
                 }
             }
         }
 
         let _ = self.markdown.flush();
-        self.spinner.start(None)?;
+        self.spinner.stop(None)?;
         Ok(())
     }
 

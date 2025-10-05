@@ -115,7 +115,7 @@ impl MarkdownRenderer {
             } else {
                 let mut current_line = String::new();
                 let mut char_count = 0;
-                
+
                 for ch in line.chars() {
                     if char_count >= width {
                         result.push_str(&current_line);
@@ -126,7 +126,7 @@ impl MarkdownRenderer {
                     current_line.push(ch);
                     char_count += 1;
                 }
-                
+
                 if !current_line.is_empty() {
                     result.push_str(&current_line);
                     result.push('\n');

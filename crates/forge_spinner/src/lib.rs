@@ -1,8 +1,6 @@
 mod console_writer;
 mod spinner;
 
-use std::sync::{Arc, Mutex};
-
 use anyhow::Result;
 pub use console_writer::*;
 pub use spinner::*;
@@ -10,13 +8,13 @@ pub use spinner::*;
 /// Manages spinner functionality for the UI
 pub struct SpinnerManager<W: Writer, S: Spinner> {
     spinner: S,
-    writer: Arc<Mutex<WriterWrapper<W>>>,
+    writer: WriterWrapper<W>,
     message: Option<String>,
 }
 
 impl<W: Writer, S: Spinner> SpinnerManager<W, S> {
-    pub fn new(writer: Arc<Mutex<WriterWrapper<W>>>, spinner: S) -> Self {
-        Self { spinner, writer, message: None }
+    pub fn new(writer: W, spinner: S) -> Self {
+        Self { spinner, writer: WriterWrapper::new(writer), message: None }
     }
 
     // Starts the spinner
@@ -38,11 +36,9 @@ impl<W: Writer, S: Spinner> SpinnerManager<W, S> {
         // Then print the message if provided
         if let Some(msg) = message {
             if new_line {
-                let mut w = self.writer.lock().unwrap();
-                w.writeln(&msg)?;
+                self.writer.writeln(&msg)?;
             } else {
-                let mut w = self.writer.lock().unwrap();
-                w.write(&msg)?;
+                self.writer.write(&msg)?;
             }
         }
         self.message = None;
@@ -75,10 +71,6 @@ impl<W: Writer, S: Spinner> SpinnerManager<W, S> {
 
         Ok(())
     }
-
-    pub fn writer(&self) -> Arc<Mutex<WriterWrapper<W>>> {
-        self.writer.clone()
-    }
 }
 
 #[cfg(test)]
@@ -91,7 +83,7 @@ mod tests {
 
     impl Default for SpinnerManager<TestWriter, TestSpinner> {
         fn default() -> Self {
-            let fixture_writer = Arc::new(Mutex::new(WriterWrapper::new(TestWriter::default())));
+            let fixture_writer = TestWriter::default();
             let fixture_spinner = TestSpinner::default();
             SpinnerManager::new(fixture_writer, fixture_spinner)
         }
@@ -154,7 +146,7 @@ mod tests {
             Some("test message".to_string())
         );
         // writer shouldn't write anything.
-        assert!(fixture.writer.lock().unwrap().message().is_none())
+        assert!(fixture.writer.message().is_none())
     }
 
     #[test]
@@ -168,7 +160,7 @@ mod tests {
         assert_eq!(fixture.message, None);
         assert_eq!(fixture.spinner.started_message, None);
         // writer shouldn't write anything.
-        assert!(fixture.writer.lock().unwrap().message().is_none())
+        assert!(fixture.writer.message().is_none())
     }
 
     #[test]
@@ -184,10 +176,7 @@ mod tests {
         assert_eq!(fixture.message, None);
 
         // writer should add new line.
-        assert_eq!(
-            fixture.writer.lock().unwrap().message(),
-            Some(&"completed\n".to_string())
-        )
+        assert_eq!(fixture.writer.message(), Some(&"completed\n".to_string()))
     }
 
     #[test]
@@ -202,7 +191,7 @@ mod tests {
         assert_eq!(fixture.message, None);
 
         // writer should add new line.
-        assert_eq!(fixture.writer.lock().unwrap().message(), None);
+        assert_eq!(fixture.writer.message(), None);
     }
 
     #[test]
@@ -217,7 +206,7 @@ mod tests {
         assert_eq!(fixture.spinner.is_running(), true);
         assert_eq!(fixture.message, Some("processing".to_string()));
         assert_eq!(
-            fixture.writer.lock().unwrap().message(),
+            fixture.writer.message(),
             Some(&"output message\n".to_string())
         );
     }
@@ -233,7 +222,7 @@ mod tests {
         assert_eq!(fixture.spinner.is_running(), false);
         assert_eq!(fixture.message, Some("processing".to_string()));
         assert_eq!(
-            fixture.writer.lock().unwrap().message(),
+            fixture.writer.message(),
             Some(&"output message".to_string())
         );
     }
