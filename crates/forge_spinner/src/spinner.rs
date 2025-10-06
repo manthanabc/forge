@@ -91,25 +91,36 @@ impl Spinner for ForgeSpinner {
         let message_clone = word.to_string();
 
         // Spwan tracker to keep the track of time in sec.
+        let (tx, mut rx) = tokio::sync::watch::channel(false);
+        self.cancel_sender = Some(tx);
         self.tracker = Some(tokio::spawn(async move {
             let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(500));
             loop {
-                interval.tick().await;
-                // Update the spinner with the current elapsed time
-                if let (Some(spinner), Some(start_time)) = (&spinner_clone, start_time_clone) {
-                    let elapsed = start_time.elapsed();
-                    let seconds = elapsed.as_secs();
+                tokio::select! {
+                    _ = interval.tick() => {
+                        // Update the spinner with the current elapsed time
+                        if let (Some(spinner), Some(start_time)) = (&spinner_clone, start_time_clone) {
+                            let elapsed = start_time.elapsed();
+                            let seconds = elapsed.as_secs();
 
-                    // Create a new message with the elapsed time
-                    let updated_message = format!(
-                        "{} {}s · {}",
-                        message_clone.green().bold(),
-                        seconds,
-                        "Ctrl+C to interrupt".white().dimmed()
-                    );
+                            // Create a new message with the elapsed time
+                            let updated_message = format!(
+                                "{} {}s · {}",
+                                message_clone.green().bold(),
+                                seconds,
+                                "Ctrl+C to interrupt".white().dimmed()
+                            );
 
-                    // Update the spinner's message
-                    spinner.set_message(updated_message);
+                            // Update the spinner's message
+                            spinner.set_message(updated_message);
+                        }
+                    }
+                    _ = rx.changed() => {
+                        // Exit the loop when the cancel signal is received
+                        if *rx.borrow() {
+                            break;
+                        }
+                    }
                 }
             }
         }));
