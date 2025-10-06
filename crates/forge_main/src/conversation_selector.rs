@@ -4,8 +4,7 @@ use anyhow::Result;
 use chrono::Utc;
 use colored::Colorize;
 use forge_api::Conversation;
-
-use crate::select::ForgeSelect;
+use forge_select::ForgeSelect;
 
 /// Logic for selecting conversations from a list
 pub struct ConversationSelector;
@@ -14,7 +13,9 @@ impl ConversationSelector {
     /// Select a conversation from the provided list
     ///
     /// Returns the selected conversation ID, or None if no selection was made
-    pub fn select_conversation(conversations: &[Conversation]) -> Result<Option<Conversation>> {
+    pub async fn select_conversation(
+        conversations: &[Conversation],
+    ) -> Result<Option<Conversation>> {
         if conversations.is_empty() {
             return Ok(None);
         }
@@ -53,6 +54,7 @@ impl ConversationSelector {
 
         let max_title_length: usize = titles.clone().map(|s| s.len()).max().unwrap_or(0);
 
+        #[derive(Clone)]
         struct ConversationItem((String, Conversation));
         impl Display for ConversationItem {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -67,10 +69,12 @@ impl ConversationSelector {
             .map(ConversationItem)
             .collect::<Vec<_>>();
 
-        if let Some(selected) =
+        if let Some(selected) = tokio::task::spawn_blocking(|| {
             ForgeSelect::select("Select the conversation to resume:", conversations)
                 .with_help_message("Type a name or use arrow keys to navigate and Enter to select")
-                .prompt()?
+                .prompt()
+        })
+        .await??
         {
             Ok(Some(selected.0.1))
         } else {
@@ -99,10 +103,12 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_select_conversation_empty_list() {
+    #[tokio::test]
+    async fn test_select_conversation_empty_list() {
         let conversations = vec![];
-        let result = ConversationSelector::select_conversation(&conversations).unwrap();
+        let result = ConversationSelector::select_conversation(&conversations)
+            .await
+            .unwrap();
         assert!(result.is_none());
     }
 
