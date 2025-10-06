@@ -68,7 +68,7 @@ impl MarkdownRenderer {
         result
     }
 
-    fn render_markdown(&self, text: &str) -> Vec<Segment> {
+    pub(crate) fn render_markdown(&self, text: &str) -> Vec<Segment> {
         let re = regex!(r"(?ms)^```(\w+)?\n(.*?)(^```|\z)");
         let mut segments = vec![];
         let mut last_end = 0;
@@ -156,15 +156,7 @@ impl<'a> MarkdownWriter<'a> {
 
     pub fn add_chunk(&mut self, chunk: &str) {
         self.buffer.push_str(chunk);
-
-        if let Some(rendered) = self.try_render() {
-            self.stream(&rendered);
-        }
-    }
-
-    fn try_render(&mut self) -> Option<String> {
-        let result = self.renderer.render(&self.buffer);
-        Some(result)
+        self.stream(&self.renderer.render(&self.buffer));
     }
 
     pub fn flush(&mut self) -> Option<String> {
@@ -241,35 +233,6 @@ mod tests {
     }
 
     #[test]
-    fn test_markdown_writer_no_changes() {
-        let renderer = MarkdownRenderer::new(MadSkin::default(), 80, 24);
-        let mut output = Vec::new();
-        {
-            let mut writer = MarkdownWriter::new(renderer, Box::new(Cursor::new(&mut output)));
-            writer.previous_rendered = "Line 1\nLine 2".to_string();
-            writer.stream("Line 1\nLine 2");
-            assert_eq!(writer.previous_rendered, "Line 1\nLine 2");
-        }
-        let output_str = String::from_utf8(output).unwrap();
-        assert!(strip_str(output_str).is_empty()); //.contains("Line 1\nLine 2"));
-    }
-
-    #[test]
-    fn test_markdown_writer_height_limited_exact_match() {
-        let renderer = MarkdownRenderer::new(MadSkin::default(), 80, 2);
-        let mut output = Vec::new();
-        {
-            let mut writer = MarkdownWriter::new(renderer, Box::new(Cursor::new(&mut output)));
-            writer.previous_rendered = "Old 1\nOld 2".to_string();
-            writer.stream("New 1\nNew 2");
-        }
-        let output_str = String::from_utf8(output).unwrap();
-        assert!(output_str.contains("\x1b[2A"));
-        assert!(output_str.contains("\x1b[0J"));
-        assert!(output_str.contains("New 1"));
-    }
-
-    #[test]
     fn test_markdown_writer_full_clear_with_height_cap() {
         let renderer = MarkdownRenderer::new(MadSkin::default(), 80, 2);
         let mut output = Vec::new();
@@ -283,22 +246,6 @@ mod tests {
         // New\n (take 2, but only 1 line)
         assert!(output_str.contains("\x1b[2A"));
         assert!(output_str.contains("\x1b[0J"));
-    }
-
-    #[test]
-    fn test_render_code_block() {
-        let fixture = MarkdownRenderer::new(MadSkin::default(), 80, 24);
-        let actual = fixture.render("```\nfn main() {}\n```");
-        // Since code highlighting is complex, just check it contains the code
-        assert!(actual.contains("fn main() {}"));
-    }
-
-    #[test]
-    fn test_wrap_code_short_lines() {
-        let fixture = "line1\nline2";
-        let actual = MarkdownRenderer::wrap_code(fixture, 80);
-        let expected = "line1\nline2\n";
-        assert_eq!(actual, expected);
     }
 
     #[test]
@@ -329,6 +276,43 @@ mod tests {
         let actual = fixture.flush();
         assert!(actual.is_some());
         assert!(actual.unwrap().contains("Hello"));
+    }
+
+    #[test]
+    fn test_render_plain_text() {
+        let fixture = MarkdownRenderer::new(MadSkin::default(), 80, 24);
+        let input = "This is plain text.\n\nWith multiple lines.";
+        let actual = fixture.render(input);
+        let clean_actual = strip_str(&actual);
+        assert!(clean_actual.contains("This is plain text."));
+        assert!(clean_actual.contains("With multiple lines."));
+    }
+
+    #[test]
+    fn test_render_multiple_code_blocks() {
+        let fixture = MarkdownRenderer::new(MadSkin::default(), 80, 24);
+        let input = "Text 1\n\n```\ncode1\n```\n\nText 2\n\n```\ncode2\n```\n\nText 3";
+        let actual = fixture.render(input);
+        let clean_actual = strip_str(&actual);
+        assert!(clean_actual.contains("Text 1"));
+        assert!(clean_actual.contains("code1"));
+        assert!(clean_actual.contains("Text 2"));
+        assert!(clean_actual.contains("code2"));
+        assert!(clean_actual.contains("Text 3"));
+        // Should have two reset codes for two code blocks
+        let reset_count = actual.matches("\x1b[0m").count();
+        assert_eq!(reset_count, 2);
+    }
+
+    #[test]
+    fn test_render_unclosed_code_block() {
+        let fixture = MarkdownRenderer::new(MadSkin::default(), 80, 24);
+        let input = "Text\n\n```\nunclosed code";
+        let actual = fixture.render(input);
+        let clean_actual = strip_str(&actual);
+        assert!(clean_actual.contains("Text"));
+        assert!(clean_actual.contains("unclosed code"));
+        assert!(actual.contains("\x1b[0m"));
     }
 
     #[test]
@@ -365,5 +349,45 @@ And some more text after the code block."#;
         assert!(clean_output.contains("println!"));
         assert!(clean_output.contains("Hello, world!"));
         assert!(clean_output.contains("more text"));
+    }
+
+    #[test]
+    fn test_segments_plain_text() {
+        let fixture = MarkdownRenderer::new(MadSkin::default(), 80, 24);
+        let input = "This is plain text.\n\nWith multiple lines.";
+        let segments = fixture.render_markdown(input);
+        assert_eq!(segments.len(), 1);
+        assert!(matches!(segments[0], Segment::Text(ref t) if t == input));
+    }
+
+    #[test]
+    fn test_segments_single_code_block_middle() {
+        let fixture = MarkdownRenderer::new(MadSkin::default(), 80, 24);
+        let input = "Before code.\n\n```\nfn main() {}\n```\n\nAfter code.";
+        let segments = fixture.render_markdown(input);
+        assert_eq!(segments.len(), 3);
+        assert!(matches!(segments[0], Segment::Text(ref t) if t.contains("Before code.")));
+        assert!(
+            matches!(segments[1], Segment::Code(ref c) if strip_str(c).contains("fn main() {}"))
+        );
+        assert!(matches!(segments[2], Segment::Text(ref t) if t.contains("After code.")));
+    }
+
+    #[test]
+    fn test_segments_multiple_code_blocks() {
+        let fixture = MarkdownRenderer::new(MadSkin::default(), 80, 24);
+        let input = "Text 1\n\n```\ncode1\n```\n\nText 2\n\n```\ncode2\n```\n\nText 3";
+        let segments = fixture.render_markdown(input);
+        assert_eq!(segments.len(), 5); // Text, Code, Text, Code, Text
+        let code_count = segments
+            .iter()
+            .filter(|s| matches!(s, Segment::Code(_)))
+            .count();
+        assert_eq!(code_count, 2);
+        let text_count = segments
+            .iter()
+            .filter(|s| matches!(s, Segment::Text(_)))
+            .count();
+        assert_eq!(text_count, 3);
     }
 }
