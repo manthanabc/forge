@@ -4,6 +4,7 @@ use anyhow::Result;
 use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
 use rand::seq::IndexedRandom;
+use tokio::sync::watch::Sender;
 use tokio::task::JoinHandle;
 
 /// Trait for spinner functionality to enable testing
@@ -21,11 +22,17 @@ pub struct ForgeSpinner {
     spinner: Option<ProgressBar>,
     start_time: Option<Instant>,
     tracker: Option<JoinHandle<()>>,
+    cancel_sender: Option<Sender<bool>>,
 }
 
 impl ForgeSpinner {
     pub fn new() -> Self {
-        Self { spinner: None, start_time: None, tracker: None }
+        Self {
+            spinner: None,
+            start_time: None,
+            tracker: None,
+            cancel_sender: None,
+        }
     }
 }
 
@@ -131,6 +138,11 @@ impl Spinner for ForgeSpinner {
     fn stop(&mut self) -> Result<()> {
         if let Some(spinner) = self.spinner.take() {
             spinner.finish_and_clear();
+        }
+
+        // Send cancel signal to tracker task
+        if let Some(cancel_sender) = self.cancel_sender.take() {
+            let _ = cancel_sender.send(true);
         }
 
         // Stop the tracker task
