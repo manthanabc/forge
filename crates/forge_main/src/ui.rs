@@ -1403,7 +1403,11 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 self.should_continue().await?;
             }
             ChatResponse::TaskReasoning { content } => {
-                self.spinner.write(content.dimmed().to_string())?;
+                self.spinner.stop(None)?;
+                if !content.trim().is_empty() {
+                    self.markdown.add_chunk_dimmed(&content);
+                }
+                // self.spinner.write(content.dimmed().to_string())?;
             }
             ChatResponse::TaskComplete => {
                 if let Some(conversation_id) = self.state.conversation_id {

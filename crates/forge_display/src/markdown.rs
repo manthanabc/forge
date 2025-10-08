@@ -52,12 +52,30 @@ impl MarkdownRenderer {
     }
 
     pub fn render(&self, content: &str) -> String {
+        self.render_with_dimmed(content, false)
+    }
+
+    pub fn render_with_dimmed(&self, content: &str, dimmed: bool) -> String {
+        let skin = if dimmed {
+            let mut dimmed_skin = self.skin.clone();
+            dimmed_skin.paragraph.add_attr(Attribute::Dim);
+            dimmed_skin.inline_code.add_attr(Attribute::Dim);
+            dimmed_skin
+                .code_block
+                .compound_style
+                .add_attr(Attribute::Dim);
+            dimmed_skin.strikeout.add_attr(Attribute::Dim);
+            dimmed_skin
+        } else {
+            self.skin.clone()
+        };
+
         let segments = self.render_markdown(content);
         let mut result = String::new();
         for segment in segments {
             match segment {
                 Segment::Text(t) => {
-                    let rendered = self.skin.text(&t, Some(self.width));
+                    let rendered = skin.text(&t, Some(self.width));
                     result.push_str(&rendered.to_string());
                 }
                 Segment::Code(c) => {
@@ -142,6 +160,7 @@ pub struct MarkdownWriter<'a> {
     renderer: MarkdownRenderer,
     previous_rendered: String,
     writer: Box<dyn std::io::Write + 'a>,
+    last_was_dimmed: bool,
 }
 
 impl<'a> MarkdownWriter<'a> {
@@ -151,12 +170,31 @@ impl<'a> MarkdownWriter<'a> {
             renderer,
             previous_rendered: String::new(),
             writer,
+            last_was_dimmed: false,
         }
     }
 
+    pub fn reset(&mut self) {
+        self.buffer.clear();
+        self.previous_rendered.clear();
+    }
+
     pub fn add_chunk(&mut self, chunk: &str) {
+        if self.last_was_dimmed {
+            self.reset();
+        }
         self.buffer.push_str(chunk);
         self.stream(&self.renderer.render(&self.buffer));
+        self.last_was_dimmed = false;
+    }
+
+    pub fn add_chunk_dimmed(&mut self, chunk: &str) {
+        if !self.last_was_dimmed {
+            self.reset();
+        }
+        self.buffer.push_str(chunk);
+        self.stream(&self.renderer.render_with_dimmed(&self.buffer, true));
+        self.last_was_dimmed = true;
     }
 
     pub fn stream(&mut self, content: &str) {
