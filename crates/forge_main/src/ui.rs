@@ -1361,7 +1361,6 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 }
             },
             ChatResponse::ToolCallStart(_) => {
-                let _ = self.spinner.write("\n");
                 self.spinner.stop(None)?;
             }
             ChatResponse::ToolCallEnd(toolcall_result) => {

@@ -57,7 +57,7 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
         let mut xml_tool_calls = None;
         let mut tool_interrupted = false;
         let mut buffering_started = false;
-        let mut last_was_reasoning = false;
+        let mut last_was_reasoning = true;
 
         while let Some(message) = self.next().await {
             let message =
