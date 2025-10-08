@@ -138,7 +138,7 @@ impl MarkdownRenderer {
 }
 
 pub struct MarkdownWriter<'a> {
-    buffer: String,
+    pub(crate) buffer: String,
     renderer: MarkdownRenderer,
     previous_rendered: String,
     writer: Box<dyn std::io::Write + 'a>,
@@ -157,17 +157,6 @@ impl<'a> MarkdownWriter<'a> {
     pub fn add_chunk(&mut self, chunk: &str) {
         self.buffer.push_str(chunk);
         self.stream(&self.renderer.render(&self.buffer));
-    }
-
-    pub fn flush(&mut self) -> Option<String> {
-        if !self.buffer.is_empty() {
-            let result = self.renderer.render(&self.buffer);
-            self.buffer.clear();
-            self.previous_rendered.clear();
-            Some(result)
-        } else {
-            None
-        }
     }
 
     pub fn stream(&mut self, content: &str) {
@@ -269,16 +258,6 @@ mod tests {
     }
 
     #[test]
-    fn test_markdown_writer_add_chunk_and_flush() {
-        let renderer = MarkdownRenderer::new(MadSkin::default(), 80, 24);
-        let mut fixture = MarkdownWriter::new(renderer, Box::new(std::io::sink()));
-        fixture.add_chunk("Hello");
-        let actual = fixture.flush();
-        assert!(actual.is_some());
-        assert!(actual.unwrap().contains("Hello"));
-    }
-
-    #[test]
     fn test_render_plain_text() {
         let fixture = MarkdownRenderer::new(MadSkin::default(), 80, 24);
         let input = "This is plain text.\n\nWith multiple lines.";
@@ -340,15 +319,10 @@ And some more text after the code block."#;
             fixture.add_chunk(&format!("{} ", chunk));
         }
 
-        let actual = fixture.flush();
-        assert!(actual.is_some());
-        let output = actual.unwrap();
-        // Remove ANSI codes for easier testing
-        let clean_output = strip_str(&output);
-        assert!(clean_output.contains("Header"));
-        assert!(clean_output.contains("println!"));
-        assert!(clean_output.contains("Hello, world!"));
-        assert!(clean_output.contains("more text"));
+        assert!(fixture.buffer.contains("Header"));
+        assert!(fixture.buffer.contains("println!"));
+        assert!(fixture.buffer.contains("Hello, world!"));
+        assert!(fixture.buffer.contains("more text"));
     }
 
     #[test]

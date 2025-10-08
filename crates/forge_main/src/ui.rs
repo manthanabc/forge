@@ -1290,7 +1290,6 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             }
         }
 
-        let _ = self.markdown.flush();
         self.spinner.stop(None)?;
         Ok(())
     }
@@ -1430,7 +1429,6 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
 
     async fn on_completion(&mut self, conversation_id: ConversationId) -> anyhow::Result<()> {
         self.spinner.start(Some("Loading Summary"))?;
-        let _ = self.markdown.flush();
         let conversation = self
             .api
             .conversation(&conversation_id)

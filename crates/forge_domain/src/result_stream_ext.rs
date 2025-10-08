@@ -57,7 +57,7 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
         let mut xml_tool_calls = None;
         let mut tool_interrupted = false;
         let mut buffering_started = false;
-        let mut last_was_reasoning = true;
+        let mut last_was_reasoning = false;
 
         while let Some(message) = self.next().await {
             let message =
@@ -95,7 +95,6 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
                         && !content_part.is_empty()
                         && !buffering_started
                     {
-                        // Apply the same tag removal as in orchestrator
                         let cleaned_content =
                             remove_tag_with_prefix(content_part.as_str(), "forge_");
                         let prefixed_content = if last_was_reasoning {
@@ -130,21 +129,24 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
             }
         }
 
+        let mut cleaned_content = String::new();
         // If buffering occurred, send the buffered cleaned content at the end
-        if buffering_started && let Some(ref sender) = sender {
-            let mut cleaned_content = remove_tag_with_prefix(content_buffered.as_str(), "forge_");
+        if buffering_started {
+            cleaned_content += &remove_tag_with_prefix(content_buffered.as_str(), "forge_");
+        }
 
-            if last_was_reasoning {
-                cleaned_content.insert(0, '\n');
-            }
+        if last_was_reasoning {
+            cleaned_content.insert(0, '\n');
+        }
 
-            if !cleaned_content.is_empty() {
-                let _ = sender
-                    .send(Ok(ChatResponse::TaskMessage {
-                        content: ChatResponseContent::Markdown(cleaned_content),
-                    }))
-                    .await;
-            }
+        if !cleaned_content.is_empty()
+            && let Some(ref sender) = sender
+        {
+            let _ = sender
+                .send(Ok(ChatResponse::TaskMessage {
+                    content: ChatResponseContent::Markdown(cleaned_content),
+                }))
+                .await;
         }
 
         // Get the full content from all messages
