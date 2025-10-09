@@ -1355,7 +1355,6 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 ChatResponseContent::Title(title) => self.writeln(title.display())?,
                 ChatResponseContent::PlainText(text) => self.writeln(text)?,
                 ChatResponseContent::Markdown(text) => {
-                    self.spinner.stop(None)?;
                     self.markdown.add_chunk(&text);
                 }
             },
@@ -1403,7 +1402,6 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 self.should_continue().await?;
             }
             ChatResponse::TaskReasoning { content } => {
-                self.spinner.stop(None)?;
                 if !content.trim().is_empty() {
                     self.markdown.add_chunk_dimmed(&content);
                 }
@@ -1412,6 +1410,12 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 if let Some(conversation_id) = self.state.conversation_id {
                     self.on_completion(conversation_id).await?;
                 }
+            }
+            ChatResponse::StartOfStream => {
+                self.spinner.stop(None)?;
+            }
+            ChatResponse::EndOfStream => {
+                self.spinner.start(None)?;
             }
         }
         Ok(())

@@ -53,15 +53,20 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
         let mut messages = Vec::new();
         let mut usage: Usage = Default::default();
         let mut content = String::new();
-        let mut content_buffered = String::new();
+
         let mut xml_tool_calls = None;
         let mut tool_interrupted = false;
+
+        let mut content_buffered = String::new();
         let mut buffering_started = false;
         let mut last_was_reasoning = false;
+
+        let mut first = true;
 
         while let Some(message) = self.next().await {
             let message =
                 anyhow::Ok(message?).with_context(|| "Failed to process message stream")?;
+
             // Process usage information
             if let Some(current_usage) = message.usage.as_ref() {
                 usage = current_usage.clone();
@@ -71,6 +76,10 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
                 && let Some(ref sender) = sender
                 && !reasoning.is_empty()
             {
+                if first {
+                    let _ = sender.send(Ok(ChatResponse::StartOfStream)).await;
+                    first = false;
+                }
                 let _ = sender
                     .send(Ok(ChatResponse::TaskReasoning {
                         content: reasoning.as_str().to_string(),
@@ -103,6 +112,11 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
                             format!("{}{}", content_buffered, cleaned_content)
                         };
                         content_buffered.clear();
+
+                        if first {
+                            let _ = sender.send(Ok(ChatResponse::StartOfStream)).await;
+                            first = false;
+                        }
 
                         let _ = sender
                             .send(Ok(ChatResponse::TaskMessage {
@@ -147,6 +161,11 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
                     content: ChatResponseContent::Markdown(cleaned_content),
                 }))
                 .await;
+        }
+        if !first {
+            if let Some(ref sender) = sender {
+                let _ = sender.send(Ok(ChatResponse::EndOfStream)).await;
+            }
         }
 
         // Get the full content from all messages
@@ -849,14 +868,16 @@ mod tests {
             sent_messages.push(msg);
         }
 
-        // Expected: Reasoning sent first, then buffered content with newline prefix
-        assert_eq!(sent_messages.len(), 2);
+        // Expected: StartOfStream, Reasoning sent first, then buffered content with
+        // newline prefix
+        assert_eq!(sent_messages.len(), 4);
+        assert!(matches!(sent_messages[0], Ok(ChatResponse::StartOfStream)));
         assert!(matches!(
-            sent_messages[0],
+            sent_messages[1],
             Ok(ChatResponse::TaskReasoning { .. })
         ));
         if let Ok(ChatResponse::TaskMessage { content: ChatResponseContent::Markdown(content) }) =
-            &sent_messages[1]
+            &sent_messages[2]
         {
             assert!(content.starts_with("\n"));
             assert!(content.contains("tool content"));
@@ -886,8 +907,17 @@ mod tests {
         while let Ok(msg) = rx.try_recv() {
             sent_messages.push(msg);
         }
+
+        // Expected: StartOfStream, Reasoning sent first, then buffered content with
+        // newline prefix
+        assert_eq!(sent_messages.len(), 5);
+        assert!(matches!(sent_messages[0], Ok(ChatResponse::StartOfStream)));
+        assert!(matches!(
+            sent_messages[1],
+            Ok(ChatResponse::TaskReasoning { .. })
+        ));
         if let Ok(ChatResponse::TaskMessage { content: ChatResponseContent::Markdown(content) }) =
-            &sent_messages[1]
+            &sent_messages[2]
         {
             assert!(content.starts_with("\n"));
             assert!(content.contains("<folse_call>"));
@@ -918,14 +948,16 @@ mod tests {
             sent_messages.push(msg);
         }
 
-        // Expected: Reasoning sent first, then content with newline prefix
-        assert_eq!(sent_messages.len(), 2);
+        // Expected: StartOfStream, Reasoning sent first, then content with newline
+        // prefix
+        assert_eq!(sent_messages.len(), 4);
+        assert!(matches!(sent_messages[0], Ok(ChatResponse::StartOfStream)));
         assert!(matches!(
-            sent_messages[0],
+            sent_messages[1],
             Ok(ChatResponse::TaskReasoning { .. })
         ));
         if let Ok(ChatResponse::TaskMessage { content: ChatResponseContent::Markdown(content) }) =
-            &sent_messages[1]
+            &sent_messages[2]
         {
             assert_eq!(content, "\nHello world");
         } else {
@@ -957,15 +989,16 @@ mod tests {
             sent_messages.push(msg);
         }
 
-        // Expected: Reasoning sent first, then buffered content at end with newline
-        // prefix
-        assert_eq!(sent_messages.len(), 2);
+        // Expected: StartOfStream, Reasoning sent first, then buffered content at end
+        // with newline prefix
+        assert_eq!(sent_messages.len(), 4);
+        assert!(matches!(sent_messages[0], Ok(ChatResponse::StartOfStream)));
         assert!(matches!(
-            sent_messages[0],
+            sent_messages[1],
             Ok(ChatResponse::TaskReasoning { .. })
         ));
         if let Ok(ChatResponse::TaskMessage { content: ChatResponseContent::Markdown(content) }) =
-            &sent_messages[1]
+            &sent_messages[2]
         {
             assert!(content.starts_with("\n"));
             assert!(content.contains("<forge_tool>content and more"));
