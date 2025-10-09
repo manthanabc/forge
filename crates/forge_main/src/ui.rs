@@ -14,7 +14,7 @@ use forge_display::{MarkdownRenderer, MarkdownWriter};
 use forge_domain::{ChatResponseContent, McpConfig, McpServerConfig, Scope, TitleFormat};
 use forge_fs::ForgeFS;
 use forge_select::ForgeSelect;
-use forge_spinner::{ForgeSpinner, SpinnerManager, StdoutWriter};
+use forge_spinner::SpinnerManager;
 use forge_tracker::ToolCallPayload;
 use merge::Merge;
 use tokio_stream::StreamExt;
@@ -46,7 +46,7 @@ pub struct UI<A, F: Fn() -> A> {
     console: Console,
     command: Arc<ForgeCommandManager>,
     cli: Cli,
-    spinner: SpinnerManager<StdoutWriter, ForgeSpinner>,
+    spinner: SpinnerManager,
     #[allow(dead_code)] // The guard is kept alive by being held in the struct
     _guard: forge_tracker::Guard,
 }
@@ -137,7 +137,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             console: Console::new(env.clone(), command.clone()),
             cli,
             command,
-            spinner: SpinnerManager::new(StdoutWriter, ForgeSpinner::new()),
+            spinner: SpinnerManager::new(),
             markdown: MarkdownWriter::new(MarkdownRenderer::default(), Box::new(std::io::stdout())),
             _guard: forge_tracker::init_tracing(env.log_path(), TRACKER.clone())?,
         })
@@ -1407,7 +1407,6 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 if !content.trim().is_empty() {
                     self.markdown.add_chunk_dimmed(&content);
                 }
-                // self.spinner.write(content.dimmed().to_string())?;
             }
             ChatResponse::TaskComplete => {
                 if let Some(conversation_id) = self.state.conversation_id {

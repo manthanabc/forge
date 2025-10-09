@@ -1441,7 +1441,6 @@ dependencies = [
  "anyhow",
  "colored",
  "indicatif",
- "pretty_assertions",
  "rand 0.9.2",
  "tokio",
 ]
