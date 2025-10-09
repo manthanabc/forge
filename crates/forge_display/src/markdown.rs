@@ -174,6 +174,16 @@ impl<'a> MarkdownWriter<'a> {
         }
     }
 
+    pub fn with_renderer(renderer: MarkdownRenderer, writer: Box<dyn std::io::Write + 'a>) -> Self {
+        Self {
+            buffer: String::new(),
+            renderer,
+            previous_rendered: String::new(),
+            writer,
+            last_was_dimmed: false,
+        }
+    }
+
     pub fn reset(&mut self) {
         self.buffer.clear();
         self.previous_rendered.clear();
@@ -237,18 +247,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_renderer_with_height() {
-        let fixture = MarkdownRenderer::new(MadSkin::default(), 80, 24);
-        assert_eq!(fixture.width, 80);
-        assert_eq!(fixture.height, 24);
-    }
-
-    #[test]
     fn test_markdown_writer_basic_incremental_update() {
-        let renderer = MarkdownRenderer::new(MadSkin::default(), 80, 24);
         let mut output = Vec::new();
         let previous_rendered = {
-            let mut writer = MarkdownWriter::new(renderer, Box::new(Cursor::new(&mut output)));
+            let mut writer = MarkdownWriter::new(Box::new(Cursor::new(&mut output)));
             writer.stream("Line 1\nLine 2\nLine 3");
             writer.previous_rendered.clone()
         };
@@ -264,7 +266,8 @@ mod tests {
         let renderer = MarkdownRenderer::new(MadSkin::default(), 80, 2);
         let mut output = Vec::new();
         {
-            let mut writer = MarkdownWriter::new(renderer, Box::new(Cursor::new(&mut output)));
+            let mut writer =
+                MarkdownWriter::with_renderer(renderer, Box::new(Cursor::new(&mut output)));
             writer.previous_rendered = "Old 1\nOld 2\nOld 3\nOld 4\nOld 5".to_string();
             writer.stream("new 1\nnew 2\nnew3\nnew 4\n new 5\n new6");
         }
@@ -334,8 +337,7 @@ mod tests {
 
     #[test]
     fn test_markdown_writer_long_text_chunk_by_chunk() {
-        let renderer = MarkdownRenderer::new(MadSkin::default(), 80, 24);
-        let mut fixture = MarkdownWriter::new(renderer, Box::new(std::io::sink()));
+        let mut fixture = MarkdownWriter::new(Box::new(std::io::sink()));
 
         let long_text = r#"# Header
 
