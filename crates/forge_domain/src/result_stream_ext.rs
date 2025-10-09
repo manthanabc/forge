@@ -162,10 +162,9 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
                 }))
                 .await;
         }
-        if !first
-            && let Some(ref sender) = sender {
-                let _ = sender.send(Ok(ChatResponse::EndOfStream)).await;
-            }
+        if !first && let Some(ref sender) = sender {
+            let _ = sender.send(Ok(ChatResponse::EndOfStream)).await;
+        }
 
         // Get the full content from all messages
         let mut content = messages
