@@ -10,7 +10,7 @@ use forge_api::{
 };
 use forge_app::ToolResolver;
 use forge_app::utils::truncate_key;
-use forge_display::{MarkdownRenderer, MarkdownWriter};
+use forge_display::MarkdownWriter;
 use forge_domain::{ChatResponseContent, McpConfig, McpServerConfig, Scope, TitleFormat};
 use forge_fs::ForgeFS;
 use forge_select::ForgeSelect;
@@ -138,7 +138,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             cli,
             command,
             spinner: SpinnerManager::new(),
-            markdown: MarkdownWriter::new(MarkdownRenderer::default(), Box::new(std::io::stdout())),
+            markdown: MarkdownWriter::new(Box::new(std::io::stdout())),
             _guard: forge_tracker::init_tracing(env.log_path(), TRACKER.clone())?,
         })
     }

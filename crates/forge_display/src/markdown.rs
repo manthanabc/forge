@@ -164,10 +164,10 @@ pub struct MarkdownWriter<'a> {
 }
 
 impl<'a> MarkdownWriter<'a> {
-    pub fn new(renderer: MarkdownRenderer, writer: Box<dyn std::io::Write + 'a>) -> Self {
+    pub fn new(writer: Box<dyn std::io::Write + 'a>) -> Self {
         Self {
             buffer: String::new(),
-            renderer,
+            renderer: MarkdownRenderer::default(),
             previous_rendered: String::new(),
             writer,
             last_was_dimmed: false,
