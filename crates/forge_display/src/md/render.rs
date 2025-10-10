@@ -1,3 +1,4 @@
+use derive_setters::Setters;
 use lazy_regex::regex;
 use syntect::easy::HighlightLines;
 use syntect::highlighting::ThemeSet;
@@ -13,12 +14,13 @@ pub enum Segment {
     Code(String),
 }
 
+#[derive(Setters)]
 pub struct MarkdownRenderer {
-    skin: MadSkin,
-    ss: SyntaxSet,
-    theme: syntect::highlighting::Theme,
-    width: usize,
-    height: usize,
+    pub skin: MadSkin,
+    pub ss: SyntaxSet,
+    pub theme: syntect::highlighting::Theme,
+    pub width: usize,
+    pub height: usize,
 }
 
 impl Default for MarkdownRenderer {
@@ -86,7 +88,7 @@ impl MarkdownRenderer {
         result
     }
 
-    pub(crate) fn render_markdown(&self, text: &str) -> Vec<Segment> {
+    fn render_markdown(&self, text: &str) -> Vec<Segment> {
         let re = regex!(r"(?ms)^```(\w+)?\n(.*?)(^```|\z)");
         let mut segments = vec![];
         let mut last_end = 0;
@@ -155,86 +157,6 @@ impl MarkdownRenderer {
     }
 }
 
-pub struct MarkdownWriter<W> {
-    buffer: String,
-    renderer: MarkdownRenderer,
-    previous_rendered: String,
-    writer: W,
-    last_was_dimmed: bool,
-}
-
-impl<W> MarkdownWriter<W> {
-    pub fn new(writer: W) -> Self {
-        Self {
-            buffer: String::new(),
-            renderer: MarkdownRenderer::default(),
-            previous_rendered: String::new(),
-            writer,
-            last_was_dimmed: false,
-        }
-    }
-}
-
-impl<W: std::io::Write> MarkdownWriter<W> {
-    #[cfg(test)]
-    fn with_renderer(mut self, renderer: MarkdownRenderer) -> Self {
-        self.renderer = renderer;
-        self
-    }
-
-    fn reset(&mut self) {
-        self.buffer.clear();
-        self.previous_rendered.clear();
-    }
-
-    pub fn add_chunk(&mut self, chunk: &str) {
-        if self.last_was_dimmed {
-            self.reset();
-        }
-        self.buffer.push_str(chunk);
-        self.stream(&self.renderer.render(&self.buffer));
-        self.last_was_dimmed = false;
-    }
-
-    pub fn add_chunk_dimmed(&mut self, chunk: &str) {
-        if !self.last_was_dimmed {
-            self.reset();
-        }
-        self.buffer.push_str(chunk);
-        self.stream(&self.renderer.render_with_dimmed(&self.buffer, true));
-        self.last_was_dimmed = true;
-    }
-
-    fn stream(&mut self, content: &str) {
-        let rendered_lines: Vec<&str> = content.lines().collect();
-        let lines_new: Vec<&str> = rendered_lines;
-        let lines_prev: Vec<&str> = self.previous_rendered.lines().collect();
-        let common = lines_prev
-            .iter()
-            .zip(&lines_new)
-            .take_while(|(p, n)| p == n)
-            .count();
-
-        let lines_to_update = self.renderer.height;
-        let mut skip = 0;
-        let up_lines = lines_prev.len() - common;
-
-        if up_lines > lines_to_update {
-            skip = up_lines - lines_to_update;
-        }
-        let up_lines = (lines_prev.len() - common) - skip;
-        if up_lines > 0 {
-            write!(self.writer, "\x1b[{}A", up_lines).unwrap();
-        }
-        write!(self.writer, "\x1b[0J").unwrap();
-        for line in lines_new[common + skip..].iter() {
-            writeln!(self.writer, "{}", line).unwrap();
-        }
-        self.writer.flush().unwrap();
-        self.previous_rendered = content.to_string();
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::io::Cursor;
@@ -243,37 +165,6 @@ mod tests {
     use strip_ansi_escapes::strip_str;
 
     use super::*;
-
-    #[test]
-    fn test_markdown_writer_basic_incremental_update() {
-        let mut output = Vec::new();
-        let previous_rendered = {
-            let mut writer = MarkdownWriter::new(Box::new(Cursor::new(&mut output)));
-            writer.stream("Line 1\nLine 2\nLine 3");
-            writer.previous_rendered.clone()
-        };
-        assert_eq!(previous_rendered, "Line 1\nLine 2\nLine 3");
-        let output_str = String::from_utf8(output).unwrap();
-        assert!(output_str.contains("Line 1"));
-        assert!(output_str.contains("Line 2"));
-        assert!(output_str.contains("Line 3"));
-    }
-
-    #[test]
-    fn test_markdown_writer_full_clear_with_height_cap() {
-        let renderer = MarkdownRenderer::new(MadSkin::default(), 80, 2);
-        let mut output = Vec::new();
-        {
-            let mut writer = MarkdownWriter::new(Cursor::new(&mut output)).with_renderer(renderer);
-            writer.previous_rendered = "Old 1\nOld 2\nOld 3\nOld 4\nOld 5".to_string();
-            writer.stream("new 1\nnew 2\nnew3\nnew 4\n new 5\n new6");
-        }
-        let output_str = String::from_utf8(output).unwrap();
-        // common=0, up_lines=5, height=2, skip=3, up_lines=2, print \x1b[2A \x1b[0J
-        // New\n (take 2, but only 1 line)
-        assert!(output_str.contains("\x1b[2A"));
-        assert!(output_str.contains("\x1b[0J"));
-    }
 
     #[test]
     fn test_wrap_code_long_line() {
@@ -330,36 +221,6 @@ mod tests {
         assert!(clean_actual.contains("Text"));
         assert!(clean_actual.contains("unclosed code"));
         assert!(actual.contains("\x1b[0m"));
-    }
-
-    #[test]
-    fn test_markdown_writer_long_text_chunk_by_chunk() {
-        let mut fixture = MarkdownWriter::new(Box::new(std::io::sink()));
-
-        let long_text = r#"# Header
-
-This is a long paragraph with multiple sentences. It contains various types of content including some code examples.
-
-```rust
-fn main() {
-    println!("Hello, world!");
-    let x = 42;
-    println!("The answer is {}", x);
-}
-```
-
-And some more text after the code block."#;
-
-        // Split into chunks and add with spaces
-        let chunks = long_text.split_whitespace().collect::<Vec<_>>();
-        for chunk in chunks {
-            fixture.add_chunk(&format!("{} ", chunk));
-        }
-
-        assert!(fixture.buffer.contains("Header"));
-        assert!(fixture.buffer.contains("println!"));
-        assert!(fixture.buffer.contains("Hello, world!"));
-        assert!(fixture.buffer.contains("more text"));
     }
 
     #[test]
