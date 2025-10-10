@@ -1,4 +1,6 @@
-use crate::MarkdownRenderer;
+use termimad::crossterm::style::Attribute;
+
+use crate::md::render::MarkdownRenderer;
 
 pub struct MarkdownWriter<W> {
     buffer: String,
@@ -46,7 +48,11 @@ impl<W: std::io::Write> MarkdownWriter<W> {
             self.reset();
         }
         self.buffer.push_str(chunk);
-        self.stream(&self.renderer.render_with_dimmed(&self.buffer, true));
+        self.stream(
+            &self
+                .renderer
+                .render_with_attr(&self.buffer, Some(Attribute::Dim)),
+        );
         self.last_was_dimmed = true;
     }
 

@@ -54,20 +54,17 @@ impl MarkdownRenderer {
     }
 
     pub fn render(&self, content: &str) -> String {
-        self.render_with_dimmed(content, false)
+        self.render_with_attr(content, None)
     }
 
-    pub fn render_with_dimmed(&self, content: &str, dimmed: bool) -> String {
-        let skin = if dimmed {
-            let mut dimmed_skin = self.skin.clone();
-            dimmed_skin.paragraph.add_attr(Attribute::Dim);
-            dimmed_skin.inline_code.add_attr(Attribute::Dim);
-            dimmed_skin
-                .code_block
-                .compound_style
-                .add_attr(Attribute::Dim);
-            dimmed_skin.strikeout.add_attr(Attribute::Dim);
-            dimmed_skin
+    pub fn render_with_attr(&self, content: &str, attr: Option<Attribute>) -> String {
+        let skin = if let Some(attr) = attr {
+            let mut skin = self.skin.clone();
+            skin.paragraph.add_attr(attr);
+            skin.inline_code.add_attr(attr);
+            skin.code_block.compound_style.add_attr(attr);
+            skin.strikeout.add_attr(attr);
+            skin
         } else {
             self.skin.clone()
         };
