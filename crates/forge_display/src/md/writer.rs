@@ -86,6 +86,7 @@ mod tests {
 
     use pretty_assertions::assert_eq;
     use strip_ansi_escapes::strip_str;
+    use termimad::MadSkin;
 
     use super::*;
 
