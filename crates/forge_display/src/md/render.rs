@@ -6,7 +6,7 @@ use syntect::parsing::SyntaxSet;
 use syntect::util::{LinesWithEndings, as_24_bit_terminal_escaped};
 use termimad::crossterm::style::{Attribute, Color};
 use termimad::crossterm::terminal;
-use termimad::{CompoundStyle, LineStyle, MadSkin};
+use termimad::{Alignment, CompoundStyle, LineStyle, MadSkin};
 
 #[derive(Debug)]
 pub enum Segment {
@@ -98,7 +98,7 @@ impl MarkdownRenderer {
     }
 
     fn wrap_code(code: &str, width: usize) -> String {
-        let mut result = String::new();
+        let mut result = "\n".to_string();
         for line in code.lines() {
             if line.chars().count() <= width {
                 result.push_str(line);
@@ -130,21 +130,45 @@ impl MarkdownRenderer {
 
 fn create_skin(attr: Option<Attribute>) -> MadSkin {
     let mut skin = MadSkin::default();
+
+    // Inline Code
     skin.inline_code = CompoundStyle::new(Some(Color::Cyan), None, Attribute::Bold.into());
 
+    // Code Blocks
     let codeblock_style = CompoundStyle::new(None, None, Default::default());
     skin.code_block = LineStyle::new(codeblock_style, Default::default());
 
-    let mut strikethrough_style = CompoundStyle::with_attr(Attribute::CrossedOut);
-    strikethrough_style.add_attr(Attribute::Dim);
-    skin.strikeout = strikethrough_style;
+    // Strikethrough
+    let mut style = CompoundStyle::with_attr(Attribute::CrossedOut);
+    style.add_attr(Attribute::Dim);
+    skin.strikeout = style;
 
+    // Headings
+    let mut style = LineStyle::default();
+    style.add_attr(Attribute::Bold);
+    style.set_fg(Color::Green);
+
+    let mut h1 = style.clone();
+    h1.align = Alignment::Center;
+    skin.headers = [
+        h1,
+        style.clone(),
+        style.clone(),
+        style.clone(),
+        style.clone(),
+        style.clone(),
+        style.clone(),
+        style.clone(),
+    ];
+
+    // Custom Attribute
     if let Some(attr) = attr {
         skin.paragraph.add_attr(attr);
         skin.inline_code.add_attr(attr);
         skin.code_block.compound_style.add_attr(attr);
         skin.strikeout.add_attr(attr);
     }
+
     skin
 }
 
