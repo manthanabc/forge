@@ -1,6 +1,9 @@
-use crate::md::render::MarkdownRenderer;
-use crossterm::{cursor::MoveUp, execute, terminal::Clear};
+use crossterm::cursor::MoveUp;
+use crossterm::execute;
+use crossterm::terminal::Clear;
 use termimad::crossterm::style::Attribute;
+
+use crate::md::render::MarkdownRenderer;
 
 pub struct MarkdownWriter<W> {
     buffer: String,
@@ -72,8 +75,12 @@ impl<W: std::io::Write> MarkdownWriter<W> {
         let up_lines = (lines_prev.len() - common) - skip;
         if up_lines > 0 {
             execute!(self.writer, MoveUp(up_lines as u16)).unwrap();
-        }        
-        execute!(self.writer, Clear(crossterm::terminal::ClearType::FromCursorDown)).unwrap();
+        }
+        execute!(
+            self.writer,
+            Clear(crossterm::terminal::ClearType::FromCursorDown)
+        )
+        .unwrap();
         for line in lines_new[common + skip..].iter() {
             writeln!(self.writer, "{}", line).unwrap();
         }
