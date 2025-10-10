@@ -16,7 +16,6 @@ pub enum Segment {
 
 #[derive(Setters)]
 pub struct MarkdownRenderer {
-    pub skin: MadSkin,
     pub ss: SyntaxSet,
     pub theme: syntect::highlighting::Theme,
     pub width: usize,
@@ -26,19 +25,8 @@ pub struct MarkdownRenderer {
 impl Default for MarkdownRenderer {
     fn default() -> Self {
         let (width, height) = terminal::size().unwrap_or((80, 24));
-        let mut skin = MadSkin::default();
-        let compound_style = CompoundStyle::new(Some(Color::Cyan), None, Attribute::Bold.into());
-        skin.inline_code = compound_style.clone();
-
-        let codeblock_style = CompoundStyle::new(None, None, Default::default());
-        skin.code_block = LineStyle::new(codeblock_style, Default::default());
-
-        let mut strikethrough_style = CompoundStyle::with_attr(Attribute::CrossedOut);
-        strikethrough_style.add_attr(Attribute::Dim);
-        skin.strikeout = strikethrough_style;
 
         Self::new(
-            skin,
             (width as usize).saturating_sub(1),
             (height as usize).saturating_sub(1),
         )
@@ -46,25 +34,15 @@ impl Default for MarkdownRenderer {
 }
 
 impl MarkdownRenderer {
-    pub fn new(skin: MadSkin, width: usize, height: usize) -> Self {
+    pub fn new(width: usize, height: usize) -> Self {
         let ss = SyntaxSet::load_defaults_newlines();
         let ts = ThemeSet::load_defaults();
         let theme = ts.themes["Solarized (dark)"].clone();
-        Self { skin, ss, theme, width, height }
+        Self { ss, theme, width, height }
     }
 
     pub fn render(&self, content: &str, attr: Option<Attribute>) -> String {
-        let skin = if let Some(attr) = attr {
-            let mut skin = self.skin.clone();
-            skin.paragraph.add_attr(attr);
-            skin.inline_code.add_attr(attr);
-            skin.code_block.compound_style.add_attr(attr);
-            skin.strikeout.add_attr(attr);
-            skin
-        } else {
-            self.skin.clone()
-        };
-
+        let skin = create_skin(attr);
         let segments = self.render_markdown(content);
         let mut result = String::new();
         for segment in segments {
@@ -150,6 +128,26 @@ impl MarkdownRenderer {
     }
 }
 
+fn create_skin(attr: Option<Attribute>) -> MadSkin {
+    let mut skin = MadSkin::default();
+    skin.inline_code = CompoundStyle::new(Some(Color::Cyan), None, Attribute::Bold.into());
+
+    let codeblock_style = CompoundStyle::new(None, None, Default::default());
+    skin.code_block = LineStyle::new(codeblock_style, Default::default());
+
+    let mut strikethrough_style = CompoundStyle::with_attr(Attribute::CrossedOut);
+    strikethrough_style.add_attr(Attribute::Dim);
+    skin.strikeout = strikethrough_style;
+
+    if let Some(attr) = attr {
+        skin.paragraph.add_attr(attr);
+        skin.inline_code.add_attr(attr);
+        skin.code_block.compound_style.add_attr(attr);
+        skin.strikeout.add_attr(attr);
+    }
+    skin
+}
+
 #[cfg(test)]
 mod tests {
     use pretty_assertions::assert_eq;
@@ -179,7 +177,7 @@ mod tests {
 
     #[test]
     fn test_render_plain_text() {
-        let fixture = MarkdownRenderer::new(MadSkin::default(), 80, 24);
+        let fixture = MarkdownRenderer::new(80, 24);
         let input = "This is plain text.\n\nWith multiple lines.";
         let actual = fixture.render(input, None);
         let clean_actual = strip_str(&actual);
@@ -189,7 +187,7 @@ mod tests {
 
     #[test]
     fn test_render_multiple_code_blocks() {
-        let fixture = MarkdownRenderer::new(MadSkin::default(), 80, 24);
+        let fixture = MarkdownRenderer::new(80, 24);
         let input = "Text 1\n\n```\ncode1\n```\n\nText 2\n\n```\ncode2\n```\n\nText 3";
         let actual = fixture.render(input, None);
         let clean_actual = strip_str(&actual);
@@ -205,7 +203,7 @@ mod tests {
 
     #[test]
     fn test_render_unclosed_code_block() {
-        let fixture = MarkdownRenderer::new(MadSkin::default(), 80, 24);
+        let fixture = MarkdownRenderer::new(80, 24);
         let input = "Text\n\n```\nunclosed code";
         let actual = fixture.render(input, None);
         let clean_actual = strip_str(&actual);
@@ -216,7 +214,7 @@ mod tests {
 
     #[test]
     fn test_segments_plain_text() {
-        let fixture = MarkdownRenderer::new(MadSkin::default(), 80, 24);
+        let fixture = MarkdownRenderer::new(80, 24);
         let input = "This is plain text.\n\nWith multiple lines.";
         let segments = fixture.render_markdown(input);
         assert_eq!(segments.len(), 1);
@@ -225,7 +223,7 @@ mod tests {
 
     #[test]
     fn test_segments_single_code_block_middle() {
-        let fixture = MarkdownRenderer::new(MadSkin::default(), 80, 24);
+        let fixture = MarkdownRenderer::new(80, 24);
         let input = "Before code.\n\n```\nfn main() {}\n```\n\nAfter code.";
         let segments = fixture.render_markdown(input);
         assert_eq!(segments.len(), 3);
@@ -238,7 +236,7 @@ mod tests {
 
     #[test]
     fn test_segments_multiple_code_blocks() {
-        let fixture = MarkdownRenderer::new(MadSkin::default(), 80, 24);
+        let fixture = MarkdownRenderer::new(80, 24);
         let input = "Text 1\n\n```\ncode1\n```\n\nText 2\n\n```\ncode2\n```\n\nText 3";
         let segments = fixture.render_markdown(input);
         assert_eq!(segments.len(), 5); // Text, Code, Text, Code, Text
