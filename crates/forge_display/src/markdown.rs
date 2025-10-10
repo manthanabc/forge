@@ -155,16 +155,16 @@ impl MarkdownRenderer {
     }
 }
 
-pub struct MarkdownWriter<'a> {
-    pub(crate) buffer: String,
+pub struct MarkdownWriter<W> {
+    buffer: String,
     renderer: MarkdownRenderer,
     previous_rendered: String,
-    writer: Box<dyn std::io::Write + 'a>,
+    writer: W,
     last_was_dimmed: bool,
 }
 
-impl<'a> MarkdownWriter<'a> {
-    pub fn new(writer: Box<dyn std::io::Write + 'a>) -> Self {
+impl<W> MarkdownWriter<W> {
+    pub fn new(writer: W) -> Self {
         Self {
             buffer: String::new(),
             renderer: MarkdownRenderer::default(),
@@ -173,18 +173,16 @@ impl<'a> MarkdownWriter<'a> {
             last_was_dimmed: false,
         }
     }
+}
 
-    pub fn with_renderer(renderer: MarkdownRenderer, writer: Box<dyn std::io::Write + 'a>) -> Self {
-        Self {
-            buffer: String::new(),
-            renderer,
-            previous_rendered: String::new(),
-            writer,
-            last_was_dimmed: false,
-        }
+impl<W: std::io::Write> MarkdownWriter<W> {
+    #[cfg(test)]
+    fn with_renderer(mut self, renderer: MarkdownRenderer) -> Self {
+        self.renderer = renderer;
+        self
     }
 
-    pub fn reset(&mut self) {
+    fn reset(&mut self) {
         self.buffer.clear();
         self.previous_rendered.clear();
     }
@@ -207,7 +205,7 @@ impl<'a> MarkdownWriter<'a> {
         self.last_was_dimmed = true;
     }
 
-    pub fn stream(&mut self, content: &str) {
+    fn stream(&mut self, content: &str) {
         let rendered_lines: Vec<&str> = content.lines().collect();
         let lines_new: Vec<&str> = rendered_lines;
         let lines_prev: Vec<&str> = self.previous_rendered.lines().collect();
@@ -266,8 +264,7 @@ mod tests {
         let renderer = MarkdownRenderer::new(MadSkin::default(), 80, 2);
         let mut output = Vec::new();
         {
-            let mut writer =
-                MarkdownWriter::with_renderer(renderer, Box::new(Cursor::new(&mut output)));
+            let mut writer = MarkdownWriter::new(Cursor::new(&mut output)).with_renderer(renderer);
             writer.previous_rendered = "Old 1\nOld 2\nOld 3\nOld 4\nOld 5".to_string();
             writer.stream("new 1\nnew 2\nnew3\nnew 4\n new 5\n new6");
         }

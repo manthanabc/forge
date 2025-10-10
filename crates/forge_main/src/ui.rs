@@ -1,4 +1,5 @@
 use std::fmt::Display;
+use std::io::Stdout;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
@@ -39,7 +40,7 @@ use crate::{TRACKER, banner, tracker};
 const MAX_CONVERSATIONS_TO_SHOW: usize = 20;
 
 pub struct UI<A, F: Fn() -> A> {
-    markdown: MarkdownWriter<'static>,
+    markdown: MarkdownWriter<Stdout>,
     state: UIState,
     api: Arc<F::Output>,
     new_api: Arc<F>,
@@ -138,7 +139,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             cli,
             command,
             spinner: SpinnerManager::new(),
-            markdown: MarkdownWriter::new(Box::new(std::io::stdout())),
+            markdown: MarkdownWriter::new(std::io::stdout()),
             _guard: forge_tracker::init_tracing(env.log_path(), TRACKER.clone())?,
         })
     }
