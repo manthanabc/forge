@@ -132,7 +132,8 @@ fn create_skin(attr: Option<Attribute>) -> MadSkin {
     let mut skin = MadSkin::default();
 
     // Inline Code
-    skin.inline_code = CompoundStyle::new(Some(Color::Cyan), None, Attribute::Bold.into());
+    let style = CompoundStyle::new(Some(Color::Cyan), None, Attribute::Bold.into());
+    skin.inline_code = style;
 
     // Code Blocks
     let codeblock_style = CompoundStyle::new(None, None, Default::default());
