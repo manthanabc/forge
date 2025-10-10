@@ -39,7 +39,7 @@ impl<W: std::io::Write> MarkdownWriter<W> {
             self.reset();
         }
         self.buffer.push_str(chunk);
-        self.stream(&self.renderer.render(&self.buffer));
+        self.stream(&self.renderer.render(&self.buffer, None));
         self.last_was_dimmed = false;
     }
 
@@ -48,11 +48,7 @@ impl<W: std::io::Write> MarkdownWriter<W> {
             self.reset();
         }
         self.buffer.push_str(chunk);
-        self.stream(
-            &self
-                .renderer
-                .render_with_attr(&self.buffer, Some(Attribute::Dim)),
-        );
+        self.stream(&self.renderer.render(&self.buffer, Some(Attribute::Dim)));
         self.last_was_dimmed = true;
     }
 
@@ -131,7 +127,7 @@ mod tests {
     fn test_render_plain_text() {
         let fixture = MarkdownRenderer::new(MadSkin::default(), 80, 24);
         let input = "This is plain text.\n\nWith multiple lines.";
-        let actual = fixture.render(input);
+        let actual = fixture.render(input, None);
         let clean_actual = strip_str(&actual);
         assert!(clean_actual.contains("This is plain text."));
         assert!(clean_actual.contains("With multiple lines."));
@@ -141,7 +137,7 @@ mod tests {
     fn test_render_multiple_code_blocks() {
         let fixture = MarkdownRenderer::new(MadSkin::default(), 80, 24);
         let input = "Text 1\n\n```\ncode1\n```\n\nText 2\n\n```\ncode2\n```\n\nText 3";
-        let actual = fixture.render(input);
+        let actual = fixture.render(input, None);
         let clean_actual = strip_str(&actual);
         assert!(clean_actual.contains("Text 1"));
         assert!(clean_actual.contains("code1"));
@@ -157,7 +153,7 @@ mod tests {
     fn test_render_unclosed_code_block() {
         let fixture = MarkdownRenderer::new(MadSkin::default(), 80, 24);
         let input = "Text\n\n```\nunclosed code";
-        let actual = fixture.render(input);
+        let actual = fixture.render(input, None);
         let clean_actual = strip_str(&actual);
         assert!(clean_actual.contains("Text"));
         assert!(clean_actual.contains("unclosed code"));
