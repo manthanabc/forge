@@ -139,12 +139,11 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
                             tool_interrupted = true;
                         }
                     }
-                    if !message.tool_calls.is_empty() && !first {
-                        if let Some(ref sender) = sender {
+                    if !message.tool_calls.is_empty() && !first
+                        && let Some(ref sender) = sender {
                             let _ = sender.send(Ok(ChatResponse::EndOfStream)).await;
                             first = true;
                         }
-                    }
                 }
             }
         }
