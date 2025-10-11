@@ -1,3 +1,6 @@
+use crossterm::cursor::MoveUp;
+use crossterm::execute;
+use crossterm::terminal::Clear;
 use termimad::crossterm::style::Attribute;
 
 use crate::md::render::MarkdownRenderer;
@@ -71,9 +74,13 @@ impl<W: std::io::Write> MarkdownWriter<W> {
         }
         let up_lines = (lines_prev.len() - common) - skip;
         if up_lines > 0 {
-            write!(self.writer, "\x1b[{}A", up_lines).unwrap();
+            execute!(self.writer, MoveUp(up_lines as u16)).unwrap();
         }
-        write!(self.writer, "\x1b[0J").unwrap();
+        execute!(
+            self.writer,
+            Clear(crossterm::terminal::ClearType::FromCursorDown)
+        )
+        .unwrap();
         for line in lines_new[common + skip..].iter() {
             writeln!(self.writer, "{}", line).unwrap();
         }
@@ -88,7 +95,6 @@ mod tests {
 
     use pretty_assertions::assert_eq;
     use strip_ansi_escapes::strip_str;
-    use termimad::MadSkin;
 
     use super::*;
 
@@ -109,7 +115,7 @@ mod tests {
 
     #[test]
     fn test_markdown_writer_full_clear_with_height_cap() {
-        let renderer = MarkdownRenderer::new(MadSkin::default(), 80, 2);
+        let renderer = MarkdownRenderer::new(80, 2);
         let mut output = Vec::new();
         {
             let mut writer = MarkdownWriter::new(Cursor::new(&mut output)).with_renderer(renderer);
@@ -125,7 +131,7 @@ mod tests {
 
     #[test]
     fn test_render_plain_text() {
-        let fixture = MarkdownRenderer::new(MadSkin::default(), 80, 24);
+        let fixture = MarkdownRenderer::new(80, 24);
         let input = "This is plain text.\n\nWith multiple lines.";
         let actual = fixture.render(input, None);
         let clean_actual = strip_str(&actual);
@@ -135,7 +141,7 @@ mod tests {
 
     #[test]
     fn test_render_multiple_code_blocks() {
-        let fixture = MarkdownRenderer::new(MadSkin::default(), 80, 24);
+        let fixture = MarkdownRenderer::new(80, 24);
         let input = "Text 1\n\n```\ncode1\n```\n\nText 2\n\n```\ncode2\n```\n\nText 3";
         let actual = fixture.render(input, None);
         let clean_actual = strip_str(&actual);
@@ -151,7 +157,7 @@ mod tests {
 
     #[test]
     fn test_render_unclosed_code_block() {
-        let fixture = MarkdownRenderer::new(MadSkin::default(), 80, 24);
+        let fixture = MarkdownRenderer::new(80, 24);
         let input = "Text\n\n```\nunclosed code";
         let actual = fixture.render(input, None);
         let clean_actual = strip_str(&actual);

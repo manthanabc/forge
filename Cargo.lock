@@ -1201,6 +1201,7 @@ name = "forge_display"
 version = "0.1.0"
 dependencies = [
  "console 0.16.1",
+ "crossterm 0.29.0",
  "derive_setters",
  "insta",
  "lazy-regex",
