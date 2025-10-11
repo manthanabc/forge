@@ -1290,7 +1290,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 }
             }
         }
-
+        self.markdown.reset();
         self.spinner.stop(None)?;
         Ok(())
     }

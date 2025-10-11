@@ -403,7 +403,7 @@ impl<S: AgentService> Orchestrator<S> {
                     tool_calls,
                     content,
                     usage,
-                    reasoning,
+                    reasoning: _,
                     reasoning_details,
                     finish_reason,
                 },

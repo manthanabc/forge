@@ -32,7 +32,7 @@ impl<W: std::io::Write> MarkdownWriter<W> {
         self
     }
 
-    fn reset(&mut self) {
+    pub fn reset(&mut self) {
         self.buffer.clear();
         self.previous_rendered.clear();
     }
