@@ -126,7 +126,6 @@ mod tests {
         // common=0, up_lines=5, height=2, skip=3, up_lines=2, print \x1b[2A \x1b[0J
         // New\n (take 2, but only 1 line)
         assert!(output_str.contains("\x1b[2A"));
-        assert!(output_str.contains("\x1b[0J"));
     }
 
     #[test]

@@ -460,13 +460,13 @@ impl<S: AgentService> Orchestrator<S> {
                     .iter()
                     .any(|call| Tools::should_yield(&call.name));
 
-            if let Some(reasoning) = reasoning.as_ref()
-                && context.is_reasoning_supported()
-            {
-                // If reasoning is present, send it as a separate message
-                self.send(ChatResponse::TaskReasoning { content: reasoning.to_string() })
-                    .await?;
-            }
+            // if let Some(reasoning) = reasoning.as_ref()
+            //     && context.is_reasoning_supported()
+            // {
+            //     // If reasoning is present, send it as a separate message
+            //     self.send(ChatResponse::TaskReasoning { content: reasoning.to_string() })
+            //         .await?;
+            // }
 
             // // Send the content message
             // self.send(ChatResponse::TaskMessage {

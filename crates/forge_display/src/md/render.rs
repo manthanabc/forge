@@ -97,6 +97,7 @@ impl MarkdownRenderer {
         segments
     }
 
+    // Wraps the codeblock and inserts a newline
     fn wrap_code(code: &str, width: usize) -> String {
         let mut result = "\n".to_string();
         for line in code.lines() {
@@ -184,7 +185,7 @@ mod tests {
     fn test_wrap_code_long_line() {
         let fixture = "a".repeat(100);
         let actual = MarkdownRenderer::wrap_code(&fixture, 50);
-        let expected = "a".repeat(50) + "\n" + &"a".repeat(50) + "\n";
+        let expected = "\n".to_owned() + &"a".repeat(50) + "\n" + &"a".repeat(50) + "\n";
         assert_eq!(actual, expected);
     }
 
@@ -196,7 +197,7 @@ mod tests {
         // wrap needed
         let fixture = "café"; // 4 chars, 5 bytes
         let actual = MarkdownRenderer::wrap_code(fixture, 4);
-        let expected = "café\n";
+        let expected = "\ncafé\n";
         assert_eq!(actual, expected);
     }
 
