@@ -105,38 +105,47 @@ impl<F: EnvironmentInfra + AppConfigRepository> ForgeProviderRegistry<F> {
             })?;
 
         // Handle URL overrides for OpenAI and Anthropic (preserve existing behavior)
-        let final_url = match config.id {
+        let (final_url, model_url) = match config.id {
             ProviderId::OpenAI => {
                 if let Some((ProviderResponse::OpenAI, override_url)) = provider_url_override {
-                    override_url
+                    (
+                        override_url.join("chat/completions")?,
+                        override_url.join("models")?,
+                    )
                 } else {
-                    Url::parse(&url)?
+                    (
+                        Url::parse(&url)?,
+                        Url::parse(
+                            &self
+                                .handlebars
+                                .render_template(&config.model_url, &template_data)?,
+                        )?,
+                    )
                 }
             }
             ProviderId::Anthropic => {
                 if let Some((ProviderResponse::Anthropic, override_url)) = provider_url_override {
-                    override_url
+                    (override_url.clone(), override_url)
                 } else {
-                    Url::parse(&url)?
+                    (
+                        Url::parse(&url)?,
+                        Url::parse(
+                            &self
+                                .handlebars
+                                .render_template(&config.model_url, &template_data)?,
+                        )?,
+                    )
                 }
             }
-            _ => Url::parse(&url)?,
+            _ => (
+                Url::parse(&url)?,
+                Url::parse(
+                    &self
+                        .handlebars
+                        .render_template(&config.model_url, &template_data)?,
+                )?,
+            ),
         };
-
-        // Render optional model_url if present
-        let model_url_template = &config.model_url;
-        let model_url = Url::parse(
-            &self
-                .handlebars
-                .render_template(model_url_template, &template_data)
-                .map_err(|e| {
-                    anyhow::anyhow!(
-                        "Failed to render model_url template for {}: {}",
-                        config.id,
-                        e
-                    )
-                })?,
-        )?;
 
         Ok(Provider {
             id: config.id,
