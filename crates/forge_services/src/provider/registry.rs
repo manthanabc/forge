@@ -355,65 +355,68 @@ mod tests {
             "https://my-resource.openai.azure.com/openai/models?api-version=2024-02-15-preview"
         );
     }
+}
+
+#[cfg(test)]
+mod env_tests {
+    use std::collections::HashMap;
+    use std::sync::Arc;
+
+    use forge_app::domain::Environment;
+    use pretty_assertions::assert_eq;
+
+    use super::*;
+
+    // Mock infrastructure that provides environment variables
+    struct MockInfra {
+        env_vars: HashMap<String, String>,
+    }
+
+    impl EnvironmentInfra for MockInfra {
+        fn get_environment(&self) -> Environment {
+            // Return a minimal Environment for testing
+            Environment {
+                os: "test".to_string(),
+                pid: 1,
+                cwd: std::path::PathBuf::from("/test"),
+                home: None,
+                shell: "test".to_string(),
+                base_path: std::path::PathBuf::from("/test"),
+                forge_api_url: Url::parse("https://test.com").unwrap(),
+                retry_config: Default::default(),
+                max_search_lines: 100,
+                max_search_result_bytes: 1000,
+                fetch_truncation_limit: 1000,
+                stdout_max_prefix_length: 100,
+                stdout_max_suffix_length: 100,
+                stdout_max_line_length: 500,
+                max_read_size: 2000,
+                http: Default::default(),
+                max_file_size: 100000,
+                tool_timeout: 300,
+                auto_open_dump: false,
+                custom_history_path: None,
+            }
+        }
+
+        fn get_env_var(&self, key: &str) -> Option<String> {
+            self.env_vars.get(key).cloned()
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl AppConfigRepository for MockInfra {
+        async fn get_app_config(&self) -> anyhow::Result<forge_app::dto::AppConfig> {
+            Ok(forge_app::dto::AppConfig::default())
+        }
+
+        async fn set_app_config(&self, _config: &forge_app::dto::AppConfig) -> anyhow::Result<()> {
+            Ok(())
+        }
+    }
 
     #[test]
     fn test_create_azure_provider_with_handlebars_urls() {
-        use std::collections::HashMap;
-        use std::sync::Arc;
-
-        use forge_app::domain::Environment;
-
-        // Mock infrastructure that provides environment variables
-        struct MockInfra {
-            env_vars: HashMap<String, String>,
-        }
-
-        impl EnvironmentInfra for MockInfra {
-            fn get_environment(&self) -> Environment {
-                // Return a minimal Environment for testing
-                Environment {
-                    os: "test".to_string(),
-                    pid: 1,
-                    cwd: std::path::PathBuf::from("/test"),
-                    home: None,
-                    shell: "test".to_string(),
-                    base_path: std::path::PathBuf::from("/test"),
-                    forge_api_url: Url::parse("https://test.com").unwrap(),
-                    retry_config: Default::default(),
-                    max_search_lines: 100,
-                    max_search_result_bytes: 1000,
-                    fetch_truncation_limit: 1000,
-                    stdout_max_prefix_length: 100,
-                    stdout_max_suffix_length: 100,
-                    stdout_max_line_length: 500,
-                    max_read_size: 2000,
-                    http: Default::default(),
-                    max_file_size: 100000,
-                    tool_timeout: 300,
-                    auto_open_dump: false,
-                    custom_history_path: None,
-                }
-            }
-
-            fn get_env_var(&self, key: &str) -> Option<String> {
-                self.env_vars.get(key).cloned()
-            }
-        }
-
-        #[async_trait::async_trait]
-        impl AppConfigRepository for MockInfra {
-            async fn get_app_config(&self) -> anyhow::Result<forge_app::dto::AppConfig> {
-                Ok(forge_app::dto::AppConfig::default())
-            }
-
-            async fn set_app_config(
-                &self,
-                _config: &forge_app::dto::AppConfig,
-            ) -> anyhow::Result<()> {
-                Ok(())
-            }
-        }
-
         // Setup environment variables
         let mut env_vars = HashMap::new();
         env_vars.insert("AZURE_API_KEY".to_string(), "test-key-123".to_string());
@@ -461,6 +464,95 @@ mod tests {
         assert_eq!(
             model_url.as_str(),
             "https://my-test-resource.openai.azure.com/openai/models?api-version=2024-02-01-preview"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_custom_anthropic_provider_with_env_var() {
+        let mut env_vars = HashMap::new();
+        env_vars.insert("ANTHROPIC_API_KEY".to_string(), "test-key".to_string());
+        env_vars.insert(
+            "ANTHROPIC_URL".to_string(),
+            "https://custom.anthropic.com/v1".to_string(),
+        );
+
+        let infra = Arc::new(MockInfra { env_vars });
+        let registry = ForgeProviderRegistry::new(infra);
+        let provider = registry
+            .provider_from_id(ProviderId::AnthropicCompatible)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            provider.url.as_str(),
+            "https://custom.anthropic.com/v1/messages"
+        );
+        assert_eq!(
+            provider.model_url.as_str(),
+            "https://custom.anthropic.com/v1/models"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_openai_no_custom_url() {
+        let mut env_vars = HashMap::new();
+        env_vars.insert("OPENAI_API_KEY".to_string(), "test-key".to_string());
+
+        let infra = Arc::new(MockInfra { env_vars });
+        let registry = ForgeProviderRegistry::new(infra);
+        let providers = registry.get_all_providers().await.unwrap();
+
+        let openai_provider = providers
+            .iter()
+            .find(|p| p.id == ProviderId::OpenAI)
+            .unwrap();
+        assert_eq!(
+            openai_provider.url.as_str(),
+            "https://api.openai.com/v1/chat/completions"
+        );
+        assert_eq!(
+            openai_provider.model_url.as_str(),
+            "https://api.openai.com/v1/models"
+        );
+
+        let anthropic_provider = providers.iter().find(|p| p.id == ProviderId::Anthropic);
+        assert!(anthropic_provider.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_all_custom_providers_with_env_vars() {
+        let mut env_vars = HashMap::new();
+        env_vars.insert("OPENAI_API_KEY".to_string(), "test-key".to_string());
+        env_vars.insert(
+            "OPENAI_URL".to_string(),
+            "https://custom.openai.com/v1".to_string(),
+        );
+        env_vars.insert("ANTHROPIC_API_KEY".to_string(), "test-key".to_string());
+        env_vars.insert(
+            "ANTHROPIC_URL".to_string(),
+            "https://custom.anthropic.com/v1".to_string(),
+        );
+
+        let infra = Arc::new(MockInfra { env_vars });
+        let registry = ForgeProviderRegistry::new(infra);
+        let providers = registry.get_all_providers().await.unwrap();
+
+        let openai_provider = providers
+            .iter()
+            .find(|p| p.id == ProviderId::OpenAICompatible)
+            .unwrap();
+        let anthropic_provider = providers
+            .iter()
+            .find(|p| p.id == ProviderId::AnthropicCompatible)
+            .unwrap();
+
+        assert_eq!(
+            openai_provider.url.as_str(),
+            "https://custom.openai.com/v1/chat/completions"
+        );
+        assert_eq!(
+            anthropic_provider.url.as_str(),
+            "https://custom.anthropic.com/v1/messages"
         );
     }
 }
