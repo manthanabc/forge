@@ -59,7 +59,6 @@ impl<F: EnvironmentInfra + AppConfigRepository> ForgeProviderRegistry<F> {
 
     fn init_providers(&self) -> Vec<Provider> {
         let configs = get_provider_configs();
-        let provider_url_override = self.provider_url();
 
         configs
             .iter()
@@ -68,17 +67,12 @@ impl<F: EnvironmentInfra + AppConfigRepository> ForgeProviderRegistry<F> {
                 if config.id == ProviderId::Forge {
                     return None;
                 }
-                self.create_provider(config, provider_url_override.clone())
-                    .ok()
+                self.create_provider(config).ok()
             })
             .collect()
     }
 
-    fn create_provider(
-        &self,
-        config: &ProviderConfig,
-        provider_url_override: Option<(ProviderResponse, Url)>,
-    ) -> anyhow::Result<Provider> {
+    fn create_provider(&self, config: &ProviderConfig) -> anyhow::Result<Provider> {
         // Check API key environment variable
         let api_key = self
             .infra
@@ -104,25 +98,7 @@ impl<F: EnvironmentInfra + AppConfigRepository> ForgeProviderRegistry<F> {
                 anyhow::anyhow!("Failed to render URL template for {}: {}", config.id, e)
             })?;
 
-        // Handle URL overrides for OpenAI and Anthropic (preserve existing behavior)
-        let final_url = match config.id {
-            ProviderId::OpenAI => {
-                if let Some((ProviderResponse::OpenAI, override_url)) = provider_url_override {
-                    override_url
-                } else {
-                    Url::parse(&url)?
-                }
-            }
-            ProviderId::Anthropic => {
-                if let Some((ProviderResponse::Anthropic, override_url)) = provider_url_override {
-                    override_url
-                } else {
-                    Url::parse(&url)?
-                }
-            }
-            _ => Url::parse(&url)?,
-        };
-
+        let final_url = Url::parse(&url)?;
         // Render optional model_url if present
         let model_url_template = &config.model_url;
         let model_url = Url::parse(
@@ -169,22 +145,6 @@ impl<F: EnvironmentInfra + AppConfigRepository> ForgeProviderRegistry<F> {
             .first()
             .cloned()
             .ok_or_else(|| forge_app::Error::NoActiveProvider.into())
-    }
-
-    fn provider_url(&self) -> Option<(ProviderResponse, Url)> {
-        if let Some(url) = self.infra.get_env_var("OPENAI_URL")
-            && let Ok(parsed_url) = Url::parse(&url)
-        {
-            return Some((ProviderResponse::OpenAI, parsed_url));
-        }
-
-        // Check for Anthropic URL override
-        if let Some(url) = self.infra.get_env_var("ANTHROPIC_URL")
-            && let Ok(parsed_url) = Url::parse(&url)
-        {
-            return Some((ProviderResponse::Anthropic, parsed_url));
-        }
-        None
     }
 
     async fn update<U>(&self, updater: U) -> anyhow::Result<()>
@@ -482,7 +442,7 @@ mod tests {
 
         // Create provider using the registry's create_provider method
         let provider = registry
-            .create_provider(azure_config, None)
+            .create_provider(azure_config)
             .expect("Should create Azure provider");
 
         // Verify all URLs are correctly rendered
