@@ -7,6 +7,8 @@ use syntect::util::{LinesWithEndings, as_24_bit_terminal_escaped};
 use termimad::crossterm::style::{Attribute, Color};
 use termimad::crossterm::terminal;
 use termimad::{Alignment, CompoundStyle, LineStyle, MadSkin};
+use wrap_ansi::wrap_ansi;
+use wrap_ansi::WrapOptions;
 
 #[derive(Debug)]
 pub enum Segment {
@@ -20,6 +22,7 @@ pub struct MarkdownRenderer {
     pub theme: syntect::highlighting::Theme,
     pub width: usize,
     pub height: usize,
+    pub wrap_options: WrapOptions
 }
 
 impl Default for MarkdownRenderer {
@@ -38,7 +41,14 @@ impl MarkdownRenderer {
         let ss = SyntaxSet::load_defaults_newlines();
         let ts = ThemeSet::load_defaults();
         let theme = ts.themes["Solarized (dark)"].clone();
-        Self { ss, theme, width, height }
+
+        let wrap_options = WrapOptions::builder()
+            .trim_whitespace(false)
+            .hard_wrap(true)
+            .build();
+
+
+        Self { ss, theme, width, height, wrap_options }
     }
 
     pub fn render(&self, content: &str, attr: Option<Attribute>) -> String {
@@ -56,7 +66,27 @@ impl MarkdownRenderer {
                 }
             }
         }
+
+        // let options = WrapOptions::builder()
+        //     .trim_whitespace(false)
+        //     .hard_wrap(true)
+        //     .word_wrap(false)
+        //     .build();
+
+        let wrapped = wrap_ansi(&result, self.width, Some(self.wrap_options));
+
+        let wrapped: Vec<String> = wrapped
+            .lines()
+            .map(|line| line.trim_end())
+            .filter(|line| !line.trim().is_empty())
+            .map(|s| s.to_owned())
+            .collect();
+        let wrapped = wrapped.join("\n");
+        result = wrapped;
+
+        
         result
+        // wrap_ansi(&result, self.width, Some(options))
     }
 
     fn render_markdown(&self, text: &str) -> Vec<Segment> {
@@ -72,16 +102,15 @@ impl MarkdownRenderer {
             let lang = cap.get(1).map(|m| m.as_str()).unwrap_or("txt");
 
             let code = cap.get(2).unwrap().as_str();
-            let wrapped_code = Self::wrap_code(code, self.width);
             let syntax = self
                 .ss
                 .find_syntax_by_token(lang)
                 .unwrap_or_else(|| self.ss.find_syntax_plain_text());
 
             let mut h = HighlightLines::new(syntax, &self.theme);
-            let mut highlighted = String::new();
+            let mut highlighted = String::from("\n");
 
-            for line in LinesWithEndings::from(&wrapped_code) {
+            for line in LinesWithEndings::from(code) {
                 let ranges: Vec<(syntect::highlighting::Style, &str)> =
                     h.highlight_line(line, &self.ss).unwrap();
                 highlighted.push_str(&as_24_bit_terminal_escaped(&ranges[..], false));
@@ -95,37 +124,6 @@ impl MarkdownRenderer {
             segments.push(Segment::Text(text[last_end..].to_string()));
         }
         segments
-    }
-
-    // Wraps the codeblock and inserts a newline
-    fn wrap_code(code: &str, width: usize) -> String {
-        let mut result = "\n".to_string();
-        for line in code.lines() {
-            if line.chars().count() <= width {
-                result.push_str(line);
-                result.push('\n');
-            } else {
-                let mut current_line = String::new();
-                let mut char_count = 0;
-
-                for ch in line.chars() {
-                    if char_count >= width {
-                        result.push_str(&current_line);
-                        result.push('\n');
-                        current_line.clear();
-                        char_count = 0;
-                    }
-                    current_line.push(ch);
-                    char_count += 1;
-                }
-
-                if !current_line.is_empty() {
-                    result.push_str(&current_line);
-                    result.push('\n');
-                }
-            }
-        }
-        result
     }
 }
 
@@ -180,26 +178,6 @@ mod tests {
     use strip_ansi_escapes::strip_str;
 
     use super::*;
-
-    #[test]
-    fn test_wrap_code_long_line() {
-        let fixture = "a".repeat(100);
-        let actual = MarkdownRenderer::wrap_code(&fixture, 50);
-        let expected = "\n".to_owned() + &"a".repeat(50) + "\n" + &"a".repeat(50) + "\n";
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn test_wrap_code_unicode_no_wrap() {
-        // Test line with multi-byte chars where byte len > char count, but chars <=
-        // width Old code: len()=5 > width=4, attempts wrapping, slices at byte
-        // 4 splitting 'é' (invalid UTF-8) New code: chars().count()=4 <=4, no
-        // wrap needed
-        let fixture = "café"; // 4 chars, 5 bytes
-        let actual = MarkdownRenderer::wrap_code(fixture, 4);
-        let expected = "\ncafé\n";
-        assert_eq!(actual, expected);
-    }
 
     #[test]
     fn test_render_plain_text() {
