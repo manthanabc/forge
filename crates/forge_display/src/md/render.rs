@@ -64,8 +64,16 @@ impl MarkdownRenderer {
                 }
             }
         }
+        let wrapped = wrap_ansi(&result, self.width, Some(self.wrap_options));
 
-        wrap_ansi(&result, self.width, Some(self.wrap_options))
+        let wrapped: Vec<String> = wrapped
+            .lines()
+            .map(|line| line.trim_end())
+            .filter(|line| !line.trim().is_empty())
+            .map(|s| s.to_owned())
+            .collect();
+
+        wrapped.join("\n")
     }
 
     fn render_markdown(&self, text: &str) -> Vec<Segment> {
