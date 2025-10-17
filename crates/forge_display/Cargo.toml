@@ -5,8 +5,6 @@ edition = "2024"
 
 [dependencies]
 derive_setters.workspace = true
-
-
 similar.workspace = true
 console.workspace = true
 regex.workspace = true
@@ -14,7 +12,6 @@ termimad.workspace = true
 syntect = "5.2"
 lazy-regex = "3.0"
 crossterm = "0.29.0"
-textwrap = { version = "0.16.0", features = ["terminal_size"] }
 wrap-ansi = "0.1"
 
 [dev-dependencies]
