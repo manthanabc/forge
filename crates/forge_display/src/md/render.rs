@@ -7,8 +7,7 @@ use syntect::util::{LinesWithEndings, as_24_bit_terminal_escaped};
 use termimad::crossterm::style::{Attribute, Color};
 use termimad::crossterm::terminal;
 use termimad::{Alignment, CompoundStyle, LineStyle, MadSkin};
-use wrap_ansi::wrap_ansi;
-use wrap_ansi::WrapOptions;
+use wrap_ansi::{WrapOptions, wrap_ansi};
 
 #[derive(Debug)]
 pub enum Segment {
@@ -22,7 +21,7 @@ pub struct MarkdownRenderer {
     pub theme: syntect::highlighting::Theme,
     pub width: usize,
     pub height: usize,
-    pub wrap_options: WrapOptions
+    pub wrap_options: WrapOptions,
 }
 
 impl Default for MarkdownRenderer {
@@ -46,7 +45,6 @@ impl MarkdownRenderer {
             .trim_whitespace(false)
             .hard_wrap(true)
             .build();
-
 
         Self { ss, theme, width, height, wrap_options }
     }
@@ -84,7 +82,6 @@ impl MarkdownRenderer {
         let wrapped = wrapped.join("\n");
         result = wrapped;
 
-        
         result
         // wrap_ansi(&result, self.width, Some(options))
     }
