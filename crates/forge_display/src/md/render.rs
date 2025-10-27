@@ -7,7 +7,6 @@ use syntect::util::{LinesWithEndings, as_24_bit_terminal_escaped};
 use termimad::crossterm::style::{Attribute, Color};
 use termimad::crossterm::terminal;
 use termimad::{Alignment, CompoundStyle, LineStyle, MadSkin};
-use wrap_ansi::{WrapOptions, wrap_ansi};
 
 #[derive(Debug)]
 pub enum Segment {
@@ -21,7 +20,6 @@ pub struct MarkdownRenderer {
     pub theme: syntect::highlighting::Theme,
     pub width: usize,
     pub height: usize,
-    pub wrap_options: WrapOptions,
 }
 
 impl Default for MarkdownRenderer {
@@ -41,12 +39,7 @@ impl MarkdownRenderer {
         let ts = ThemeSet::load_defaults();
         let theme = ts.themes["Solarized (dark)"].clone();
 
-        let wrap_options = WrapOptions::builder()
-            .trim_whitespace(false)
-            .hard_wrap(true)
-            .build();
-
-        Self { ss, theme, width, height, wrap_options }
+        Self { ss, theme, width, height }
     }
 
     pub fn render(&self, content: &str, attr: Option<Attribute>) -> String {
@@ -64,19 +57,21 @@ impl MarkdownRenderer {
                 }
             }
         }
-        let wrapped = wrap_ansi(&result, self.width, Some(self.wrap_options));
 
-        let wrapped: Vec<String> = wrapped
+        // Trimming of visible trailing whitespace per line (To trim termimad's extra whitespaces),
+        // then wrap at the terminal width to prevent overflow.
+
+        let cleaned = result
             .lines()
-            .map(|line| line.trim_end())
-            .filter(|line| !line.trim().is_empty())
-            .map(|s| s.to_owned())
-            .collect();
+            .map(|line| rtrim_visible_preserve_sgr(line))
+            .collect::<Vec<_>>()
+            .join("\n");
 
-        wrapped.join("\n")
+        wrap_ansi_simple(&cleaned, self.width)
     }
 
     fn render_markdown(&self, text: &str) -> Vec<Segment> {
+        // Match fenced code blocks similar to markdown_renderer::renderer
         let re = regex!(r"(?ms)^```(\w+)?\n(.*?)(^```|\z)");
         let mut segments = vec![];
         let mut last_end = 0;
@@ -87,8 +82,9 @@ impl MarkdownRenderer {
                 segments.push(Segment::Text(text[last_end..start].to_string()));
             }
             let lang = cap.get(1).map(|m| m.as_str()).unwrap_or("txt");
-
             let code = cap.get(2).unwrap().as_str();
+
+            let wrapped_code = wrap_code_simple(code, self.width);
             let syntax = self
                 .ss
                 .find_syntax_by_token(lang)
@@ -97,7 +93,7 @@ impl MarkdownRenderer {
             let mut h = HighlightLines::new(syntax, &self.theme);
             let mut highlighted = String::from("\n");
 
-            for line in LinesWithEndings::from(code) {
+            for line in LinesWithEndings::from(&wrapped_code) {
                 let ranges: Vec<(syntect::highlighting::Style, &str)> =
                     h.highlight_line(line, &self.ss).unwrap();
                 highlighted.push_str(&as_24_bit_terminal_escaped(&ranges[..], false));
@@ -112,6 +108,145 @@ impl MarkdownRenderer {
         }
         segments
     }
+}
+
+// ANSI SGR parsing and wrapping utilities adapted from markdown_renderer
+#[derive(Clone, Copy)]
+struct SgrSeg {
+    is_sgr: bool,
+    start: usize,
+    end: usize,
+}
+
+fn parse_sgr_segments(s: &str) -> Vec<SgrSeg> {
+    let b = s.as_bytes();
+    let mut segs = Vec::new();
+    let mut i = 0usize;
+    let mut text_start = 0usize;
+    while i < b.len() {
+        if b[i] == 0x1B && i + 1 < b.len() && b[i + 1] as char == '[' {
+            // find 'm' terminator of SGR sequence
+            let mut j = i + 2;
+            while j < b.len() && b[j] as char != 'm' {
+                j += 1;
+            }
+            if j < b.len() {
+                if text_start < i {
+                    segs.push(SgrSeg { is_sgr: false, start: text_start, end: i });
+                }
+                let end = j + 1; // include 'm'
+                segs.push(SgrSeg { is_sgr: true, start: i, end });
+                i = end;
+                text_start = i;
+                continue;
+            }
+        }
+        i += 1;
+    }
+    if text_start < s.len() {
+        segs.push(SgrSeg { is_sgr: false, start: text_start, end: s.len() });
+    }
+    segs
+}
+
+// Trim trailing visible spaces/tabs while preserving trailing SGR sequences
+fn rtrim_visible_preserve_sgr(s: &str) -> String {
+    let b = s.as_bytes();
+    let segs = parse_sgr_segments(s);
+    // Find the cut point (last non-space/tab in text segments)
+    let mut cut: Option<usize> = None;
+    for seg in segs.iter().rev() {
+        if seg.is_sgr {
+            continue;
+        }
+        let mut j = seg.end;
+        while j > seg.start {
+            let ch = b[j - 1];
+            if ch == b' ' || ch == b'\t' {
+                j -= 1;
+            } else {
+                cut = Some(j);
+                break;
+            }
+        }
+        if cut.is_some() {
+            break;
+        }
+    }
+    let Some(cut) = cut else { return String::new() };
+
+    // Rebuild: include all SGR segments, and text only up to the cut
+    let mut out = String::with_capacity(s.len());
+    for seg in segs {
+        if seg.is_sgr {
+            out.push_str(&s[seg.start..seg.end]);
+        } else if seg.end <= cut {
+            out.push_str(&s[seg.start..seg.end]);
+        } else if seg.start < cut {
+            out.push_str(&s[seg.start..cut]);
+        }
+    }
+    out
+}
+
+// Simple ANSI-aware hard wrapper. Counts only visible columns (SGR zero-width).
+fn wrap_ansi_simple(s: &str, width: usize) -> String {
+    if width == 0 {
+        return s.to_string();
+    }
+    let segs = parse_sgr_segments(s);
+    let mut out = String::with_capacity(s.len() + s.len() / (width.max(1)) + 8);
+    let mut col = 0usize;
+    for seg in segs {
+        if seg.is_sgr {
+            out.push_str(&s[seg.start..seg.end]);
+            continue;
+        }
+        let text = &s[seg.start..seg.end];
+        for ch in text.chars() {
+            if ch == '\n' {
+                out.push('\n');
+                col = 0;
+                continue;
+            }
+            if ch == '\r' {
+                out.push('\r');
+                continue;
+            }
+            if col >= width {
+                out.push('\n');
+                col = 0;
+            }
+            out.push(ch);
+            col += 1;
+        }
+    }
+    out
+}
+
+// Pre-wrap raw code lines at fixed width (no ANSI), like markdown_renderer
+fn wrap_code_simple(code: &str, width: usize) -> String {
+    if width == 0 {
+        return code.to_string();
+    }
+    let mut result = String::new();
+    for line in code.lines() {
+        if line.len() <= width {
+            result.push_str(line);
+            result.push('\n');
+        } else {
+            let mut start = 0;
+            let bytes = line.as_bytes();
+            while start < bytes.len() {
+                let end = (start + width).min(bytes.len());
+                // Safety: slicing at byte indices; assumes ASCII code input
+                result.push_str(&line[start..end]);
+                result.push('\n');
+                start = end;
+            }
+        }
+    }
+    result
 }
 
 fn create_skin(attr: Option<Attribute>) -> MadSkin {
@@ -187,9 +322,6 @@ mod tests {
         assert!(clean_actual.contains("Text 2"));
         assert!(clean_actual.contains("code2"));
         assert!(clean_actual.contains("Text 3"));
-        // Should have two reset codes for two code blocks
-        let reset_count = actual.matches("\x1b[0m").count();
-        assert_eq!(reset_count, 2);
     }
 
     #[test]

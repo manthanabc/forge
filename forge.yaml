@@ -18,4 +18,4 @@ commands:
       <test>cargo insta test --accept --unreferenced=delete</test>
     - Fix every issue found in the process
 max_walker_depth: 1024
-tool_supported: true
+tool_supported: false
