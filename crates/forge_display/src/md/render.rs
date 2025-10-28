@@ -64,7 +64,7 @@ impl MarkdownRenderer {
         // then wrap once at the terminal width to prevent overflow.
         let cleaned = result
             .lines()
-            .map(|line| rtrim_visible_preserve_sgr(line))
+            .map(rtrim_visible_preserve_sgr)
             .collect::<Vec<_>>()
             .join("\n");
 
