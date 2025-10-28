@@ -45,7 +45,8 @@ fn parse_sgr_segments(s: &str) -> Vec<SgrSeg> {
     segs
 }
 
-/// Trim trailing visible spaces and tabs while preserving trailing SGR sequences.
+/// Trim trailing visible spaces and tabs while preserving trailing SGR
+/// sequences.
 pub fn rtrim_visible_preserve_sgr(s: &str) -> String {
     let b = s.as_bytes();
     let segs = parse_sgr_segments(s);
@@ -93,7 +94,9 @@ pub fn rtrim_visible_preserve_sgr(s: &str) -> String {
 /// - `s`: Input string which may contain ANSI SGR escape sequences.
 /// - `width`: Target column width for wrapping.
 pub fn wrap_ansi_simple(s: &str, width: usize) -> String {
-    if width == 0 { return s.to_string(); }
+    if width == 0 {
+        return s.to_string();
+    }
     let mut out = String::with_capacity(s.len());
     let mut col = 0usize;
     for seg in parse_sgr_segments(s) {
@@ -103,10 +106,16 @@ pub fn wrap_ansi_simple(s: &str, width: usize) -> String {
         }
         for ch in s[seg.start..seg.end].chars() {
             match ch {
-                '\n' => { out.push('\n'); col = 0; }
+                '\n' => {
+                    out.push('\n');
+                    col = 0;
+                }
                 '\r' => out.push('\r'),
                 _ => {
-                    if col == width { out.push('\n'); col = 0; }
+                    if col == width {
+                        out.push('\n');
+                        col = 0;
+                    }
                     out.push(ch);
                     col += 1;
                 }

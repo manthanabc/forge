@@ -7,6 +7,7 @@ use syntect::util::{LinesWithEndings, as_24_bit_terminal_escaped};
 use termimad::crossterm::style::{Attribute, Color};
 use termimad::crossterm::terminal;
 use termimad::{Alignment, CompoundStyle, LineStyle, MadSkin};
+
 use super::ansi::{rtrim_visible_preserve_sgr, wrap_ansi_simple};
 
 #[derive(Debug)]
