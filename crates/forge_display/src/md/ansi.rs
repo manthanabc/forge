@@ -50,6 +50,7 @@ fn parse_sgr_segments(s: &str) -> Vec<SgrSeg> {
 pub fn rtrim_visible_preserve_sgr(s: &str) -> String {
     let b = s.as_bytes();
     let segs = parse_sgr_segments(s);
+    let has_sgr = segs.iter().any(|seg| seg.is_sgr);
     // Find the cut point (last non-space/tab in text segments)
     let mut cut: Option<usize> = None;
     for seg in segs.iter().rev() {
@@ -70,7 +71,22 @@ pub fn rtrim_visible_preserve_sgr(s: &str) -> String {
             break;
         }
     }
-    let Some(cut) = cut else { return String::new() };
+    // If there's no visible text but there are SGR sequences,
+    // preserve those SGR sequences (e.g., a lone reset code line).
+    if cut.is_none() {
+        if has_sgr {
+            let mut only_sgr = String::new();
+            for seg in &segs {
+                if seg.is_sgr {
+                    only_sgr.push_str(&s[seg.start..seg.end]);
+                }
+            }
+            return only_sgr;
+        } else {
+            return String::new();
+        }
+    }
+    let cut = cut.unwrap();
 
     // Rebuild: include all SGR segments, and text only up to the cut
     let mut out = String::with_capacity(s.len());
@@ -133,9 +149,9 @@ mod tests {
 
     #[test]
     fn fixture_rtrim_preserves_sgr() {
-        let fixture = "\u{1b}[31mHello   \u{1b}[0m   ";
+        let fixture = "\u{1b}[31mHello\u{1b}[0m   ";
         let actual = rtrim_visible_preserve_sgr(fixture);
-        let expected = "\u{1b}[31mHello   \u{1b}[0m";
+        let expected = "\u{1b}[31mHello\u{1b}[0m";
         assert_eq!(actual, expected);
     }
 
