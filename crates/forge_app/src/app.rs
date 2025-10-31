@@ -3,23 +3,23 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use chrono::Local;
-use forge_domain::*;
+use forge_domain::{InitAuth, *};
 use forge_stream::MpscStream;
 
 use crate::apply_tunable_parameters::ApplyTunableParameters;
 use crate::authenticator::Authenticator;
-use crate::dto::{InitAuth, ToolsOverview};
+use crate::dto::ToolsOverview;
 use crate::init_conversation_metrics::InitConversationMetrics;
 use crate::orch::Orchestrator;
-use crate::services::{CustomInstructionsService, TemplateService};
+use crate::services::{AppConfigService, CustomInstructionsService, TemplateService};
 use crate::set_conversation_id::SetConversationId;
 use crate::system_prompt::SystemPrompt;
 use crate::tool_registry::ToolRegistry;
 use crate::tool_resolver::ToolResolver;
 use crate::user_prompt::UserPromptGenerator;
 use crate::{
-    AgentRegistry, ConversationService, EnvironmentService, FileDiscoveryService, ProviderRegistry,
-    ProviderService, Services, Walker, WorkflowService,
+    AgentRegistry, ConversationService, EnvironmentService, FileDiscoveryService, ProviderService,
+    Services, Walker, WorkflowService,
 };
 
 /// ForgeApp handles the core chat functionality by orchestrating various
