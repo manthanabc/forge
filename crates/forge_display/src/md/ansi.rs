@@ -91,9 +91,7 @@ pub fn rtrim_visible_preserve_sgr(s: &str) -> String {
     // Rebuild: include all SGR segments, and text only up to the cut
     let mut out = String::with_capacity(s.len());
     for seg in segs {
-        if seg.is_sgr {
-            out.push_str(&s[seg.start..seg.end]);
-        } else if seg.end <= cut {
+        if seg.is_sgr || seg.end <= cut {
             out.push_str(&s[seg.start..seg.end]);
         } else if seg.start < cut {
             out.push_str(&s[seg.start..cut]);
