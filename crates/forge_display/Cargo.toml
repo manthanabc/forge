@@ -13,6 +13,7 @@ syntect = "5.2"
 lazy-regex = "3.0"
 crossterm = "0.29.0"
 wrap-ansi = "0.1"
+forge_spinner = { path = "../forge_spinner" }
 
 [dev-dependencies]
 insta.workspace = true

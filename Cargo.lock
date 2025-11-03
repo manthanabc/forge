@@ -1249,6 +1249,7 @@ dependencies = [
  "console 0.16.1",
  "crossterm 0.29.0",
  "derive_setters",
+ "forge_spinner",
  "insta",
  "lazy-regex",
  "pretty_assertions",

@@ -1,6 +1,7 @@
-use crossterm::cursor::MoveUp;
+use crossterm::cursor::{Hide, MoveUp, Show};
 use crossterm::execute;
 use crossterm::terminal::Clear;
+use forge_spinner::SpinnerManager;
 use termimad::crossterm::style::Attribute;
 
 use crate::md::render::MarkdownRenderer;
@@ -37,55 +38,69 @@ impl<W: std::io::Write> MarkdownWriter<W> {
         self.previous_rendered.clear();
     }
 
-    pub fn add_chunk(&mut self, chunk: &str) {
+    pub fn add_chunk(&mut self, chunk: &str, spn: &mut SpinnerManager) {
         if self.last_was_dimmed {
             self.reset();
         }
         self.buffer.push_str(chunk);
-        self.stream(&self.renderer.render(&self.buffer, None));
+        self.stream(&self.renderer.render(&self.buffer, None), spn);
         self.last_was_dimmed = false;
     }
 
-    pub fn add_chunk_dimmed(&mut self, chunk: &str) {
+    pub fn add_chunk_dimmed(&mut self, chunk: &str, spn: &mut SpinnerManager) {
         if !self.last_was_dimmed {
             self.reset();
         }
         self.buffer.push_str(chunk);
-        self.stream(&self.renderer.render(&self.buffer, Some(Attribute::Dim)));
+        self.stream(
+            &self.renderer.render(&self.buffer, Some(Attribute::Dim)),
+            spn,
+        );
         self.last_was_dimmed = true;
     }
 
-    fn stream(&mut self, content: &str) {
+    fn stream(&mut self, content: &str, spn: &mut SpinnerManager) {
         let rendered_lines: Vec<&str> = content.lines().collect();
         let lines_new: Vec<&str> = rendered_lines;
-        let lines_prev: Vec<&str> = self.previous_rendered.lines().collect();
-        let common = lines_prev
-            .iter()
-            .zip(&lines_new)
-            .take_while(|(p, n)| p == n)
-            .count();
+        let lines_prev: Vec<String> = self
+            .previous_rendered
+            .lines()
+            .map(|s| s.to_string())
+            .collect();
 
-        let lines_to_update = self.renderer.height;
-        let mut skip = 0;
-        let up_lines = lines_prev.len() - common;
+        spn.suspend(|| {
+            execute!(self.writer, Hide).unwrap();
 
-        if up_lines > lines_to_update {
-            skip = up_lines - lines_to_update;
-        }
-        let up_lines = (lines_prev.len() - common) - skip;
-        if up_lines > 0 {
-            execute!(self.writer, MoveUp(up_lines as u16)).unwrap();
-        }
-        execute!(
-            self.writer,
-            Clear(crossterm::terminal::ClearType::FromCursorDown)
-        )
-        .unwrap();
-        for line in lines_new[common + skip..].iter() {
-            writeln!(self.writer, "{}", line).unwrap();
-        }
-        self.writer.flush().unwrap();
-        self.previous_rendered = content.to_string();
+            let common = lines_prev
+                .iter()
+                .map(|s| s.as_str())
+                .zip(&lines_new)
+                .take_while(|(p, n)| p == *n)
+                .count();
+
+            let lines_to_update = self.renderer.height;
+            let mut skip = 0;
+            let up_lines = lines_prev.len() - common;
+
+            if up_lines > lines_to_update {
+                skip = up_lines - lines_to_update;
+            }
+            let up_lines = (lines_prev.len() - common) - skip;
+            if up_lines > 0 {
+                execute!(self.writer, MoveUp(up_lines as u16)).unwrap();
+            }
+            execute!(
+                self.writer,
+                Clear(crossterm::terminal::ClearType::FromCursorDown)
+            )
+            .unwrap();
+            for line in lines_new[common + skip..].iter() {
+                writeln!(self.writer, "{}", line).unwrap();
+            }
+            self.writer.flush().unwrap();
+            execute!(self.writer, Show).unwrap();
+            self.previous_rendered = content.to_string();
+        })
     }
 }
 
@@ -101,9 +116,10 @@ mod tests {
     #[test]
     fn test_markdown_writer_basic_incremental_update() {
         let mut output = Vec::new();
+        let mut spn = SpinnerManager::new();
         let previous_rendered = {
             let mut writer = MarkdownWriter::new(Box::new(Cursor::new(&mut output)));
-            writer.stream("Line 1\nLine 2\nLine 3");
+            writer.stream("Line 1\nLine 2\nLine 3", &mut spn);
             writer.previous_rendered.clone()
         };
         assert_eq!(previous_rendered, "Line 1\nLine 2\nLine 3");
@@ -117,10 +133,11 @@ mod tests {
     fn test_markdown_writer_full_clear_with_height_cap() {
         let renderer = MarkdownRenderer::new(80, 2);
         let mut output = Vec::new();
+        let mut spn = SpinnerManager::new();
         {
             let mut writer = MarkdownWriter::new(Cursor::new(&mut output)).with_renderer(renderer);
             writer.previous_rendered = "Old 1\nOld 2\nOld 3\nOld 4\nOld 5".to_string();
-            writer.stream("new 1\nnew 2\nnew3\nnew 4\n new 5\n new6");
+            writer.stream("new 1\nnew 2\nnew3\nnew 4\n new 5\n new6", &mut spn);
         }
         let output_str = String::from_utf8(output).unwrap();
         // common=0, up_lines=5, height=2, skip=3, up_lines=2, print \x1b[2A \x1b[0J
@@ -168,6 +185,7 @@ mod tests {
     #[test]
     fn test_markdown_writer_long_text_chunk_by_chunk() {
         let mut fixture = MarkdownWriter::new(Box::new(std::io::sink()));
+        let mut spn = SpinnerManager::new();
 
         let long_text = r#"# Header
 
@@ -186,7 +204,7 @@ And some more text after the code block."#;
         // Split into chunks and add with spaces
         let chunks = long_text.split_whitespace().collect::<Vec<_>>();
         for chunk in chunks {
-            fixture.add_chunk(&format!("{} ", chunk));
+            fixture.add_chunk(&format!("{} ", chunk), &mut spn);
         }
 
         assert!(fixture.buffer.contains("Header"));

@@ -1529,7 +1529,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 ChatResponseContent::Title(title) => self.writeln(title.display())?,
                 ChatResponseContent::PlainText(text) => self.writeln(text)?,
                 ChatResponseContent::Markdown(text) => {
-                    self.markdown.add_chunk(&text);
+                    self.markdown.add_chunk(&text, &mut self.spinner);
                 }
             },
             ChatResponse::ToolCallStart(_) => {
@@ -1577,7 +1577,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             }
             ChatResponse::TaskReasoning { content } => {
                 if !content.trim().is_empty() {
-                    self.markdown.add_chunk_dimmed(&content);
+                    self.markdown.add_chunk_dimmed(&content, &mut self.spinner);
                 }
             }
             ChatResponse::TaskComplete => {
@@ -1586,10 +1586,10 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 }
             }
             ChatResponse::StartOfStream => {
-                self.spinner.stop(None)?;
+                // self.spinner.stop(None)?;
             }
             ChatResponse::EndOfStream => {
-                self.spinner.start(None)?;
+                // self.spinner.start(None)?;
             }
         }
         Ok(())
@@ -1852,7 +1852,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
 
         // Format and display the message using the message_display module
         if let Some(message) = message {
-            self.markdown.add_chunk(message);
+            self.markdown.add_chunk(message, &mut self.spinner);
         }
 
         Ok(())

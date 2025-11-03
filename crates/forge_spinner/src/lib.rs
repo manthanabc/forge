@@ -142,4 +142,15 @@ impl SpinnerManager {
 
         Ok(())
     }
+
+    pub fn suspend<F, R>(&mut self, f: F) -> R
+    where
+        F: FnOnce() -> R,
+    {
+        if let Some(pb) = &self.spinner {
+            pb.suspend(f)
+        } else {
+            f()
+        }
+    }
 }
