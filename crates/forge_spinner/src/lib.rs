@@ -19,11 +19,9 @@ impl SpinnerManager {
     pub fn new() -> Self {
         Self::default()
     }
-
     /// Start the spinner with a message
     pub fn start(&mut self, message: Option<&str>) -> Result<()> {
         self.stop(None)?;
-
         let words = [
             "Thinking",
             "Processing",

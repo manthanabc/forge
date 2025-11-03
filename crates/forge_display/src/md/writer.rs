@@ -68,9 +68,9 @@ impl<W: std::io::Write> MarkdownWriter<W> {
             .map(|s| s.to_string())
             .collect();
 
+        // Hide the cursor
+        write!(self.writer, "\x1b[?25l");
         spn.suspend(|| {
-            execute!(self.writer, Hide).unwrap();
-
             let common = lines_prev
                 .iter()
                 .map(|s| s.as_str())
@@ -85,7 +85,7 @@ impl<W: std::io::Write> MarkdownWriter<W> {
             if up_lines > lines_to_update {
                 skip = up_lines - lines_to_update;
             }
-            let up_lines = (lines_prev.len() - common) - skip;
+            let up_lines = (lines_prev.len() - common) - skip + 1;
             if up_lines > 0 {
                 execute!(self.writer, MoveUp(up_lines as u16)).unwrap();
             }
@@ -97,8 +97,8 @@ impl<W: std::io::Write> MarkdownWriter<W> {
             for line in lines_new[common + skip..].iter() {
                 writeln!(self.writer, "{}", line).unwrap();
             }
+            writeln!(self.writer, "").unwrap();
             self.writer.flush().unwrap();
-            execute!(self.writer, Show).unwrap();
             self.previous_rendered = content.to_string();
         })
     }
@@ -141,8 +141,8 @@ mod tests {
         }
         let output_str = String::from_utf8(output).unwrap();
         // common=0, up_lines=5, height=2, skip=3, up_lines=2, print \x1b[2A \x1b[0J
-        // New\n (take 2, but only 1 line)
-        assert!(output_str.contains("\x1b[2A"));
+        // New\n (take 2, but only 1 line) + 1 (for spinner is skips one line)
+        assert!(output_str.contains("\x1b[3A"));
     }
 
     #[test]
