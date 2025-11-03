@@ -62,7 +62,7 @@ impl MarkdownRenderer {
 
         // Trim trailing visible whitespace per line (termimad can add spaces),
         // then wrap once at the terminal width to prevent overflow.
-        let mut cleaned = result
+        let cleaned = result
             .lines()
             .map(rtrim_visible_preserve_sgr)
             .collect::<Vec<_>>()

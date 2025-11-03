@@ -1,4 +1,4 @@
-use crossterm::cursor::{Hide, MoveUp, Show};
+use crossterm::cursor::MoveUp;
 use crossterm::execute;
 use crossterm::terminal::Clear;
 use forge_spinner::SpinnerManager;
@@ -97,7 +97,7 @@ impl<W: std::io::Write> MarkdownWriter<W> {
             for line in lines_new[common + skip..].iter() {
                 writeln!(self.writer, "{}", line).unwrap();
             }
-            writeln!(self.writer, "").unwrap();
+            writeln!(self.writer).unwrap();
             self.writer.flush().unwrap();
             self.previous_rendered = content.to_string();
         })
