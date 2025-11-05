@@ -12,6 +12,12 @@ pub struct MarkdownWriter<W> {
     previous_rendered: String,
     writer: W,
     last_was_dimmed: bool,
+    // Micro-batching state to coalesce tiny chunks
+    pending_bytes: usize,
+    last_stream_at: Option<Instant>,
+    // Config: render if pending >= threshold or window elapsed
+    coalesce_bytes: usize,
+    coalesce_window: Duration,
 }
 
 impl<W> MarkdownWriter<W> {
@@ -22,9 +28,16 @@ impl<W> MarkdownWriter<W> {
             previous_rendered: String::new(),
             writer,
             last_was_dimmed: false,
+            pending_bytes: 0,
+            last_stream_at: None,
+            // Reasonable defaults: ~80 bytes or 60ms window
+            coalesce_bytes: 200,
+            coalesce_window: Duration::from_millis(200),
         }
     }
 }
+use std::thread;
+use std::time::{Duration, Instant};
 
 impl<W: std::io::Write> MarkdownWriter<W> {
     #[cfg(test)]
@@ -36,27 +49,71 @@ impl<W: std::io::Write> MarkdownWriter<W> {
     pub fn reset(&mut self) {
         self.buffer.clear();
         self.previous_rendered.clear();
+        self.pending_bytes = 0;
+        self.last_stream_at = None;
     }
 
     pub fn add_chunk(&mut self, chunk: &str, spn: &mut SpinnerManager) {
+        // If switching from dimmed -> normal, flush any pending dimmed content first
         if self.last_was_dimmed {
+            if self.pending_bytes > 0 {
+                let rendered = self.renderer.render(&self.buffer, Some(Attribute::Dim));
+                self.stream(&rendered, spn);
+            }
             self.reset();
         }
         self.buffer.push_str(chunk);
-        self.stream(&self.renderer.render(&self.buffer, None), spn);
+        self.pending_bytes = self.pending_bytes.saturating_add(chunk.len());
+        self.maybe_stream(None, spn);
         self.last_was_dimmed = false;
     }
 
     pub fn add_chunk_dimmed(&mut self, chunk: &str, spn: &mut SpinnerManager) {
+        // If switching from normal -> dimmed, flush any pending normal content first
         if !self.last_was_dimmed {
+            if self.pending_bytes > 0 {
+                let rendered = self.renderer.render(&self.buffer, None);
+                self.stream(&rendered, spn);
+            }
             self.reset();
         }
         self.buffer.push_str(chunk);
-        self.stream(
-            &self.renderer.render(&self.buffer, Some(Attribute::Dim)),
-            spn,
-        );
+        self.pending_bytes = self.pending_bytes.saturating_add(chunk.len());
+        self.maybe_stream(Some(Attribute::Dim), spn);
         self.last_was_dimmed = true;
+    }
+
+    /// Flush any pending buffered updates immediately using the current mode
+    pub fn flush(&mut self, spn: &mut SpinnerManager) {
+        if self.pending_bytes == 0 {
+            return;
+        }
+        let attr = if self.last_was_dimmed {
+            Some(Attribute::Dim)
+        } else {
+            None
+        };
+        let rendered = self.renderer.render(&self.buffer, attr);
+        self.stream(&rendered, spn);
+        self.pending_bytes = 0;
+        self.last_stream_at = Some(Instant::now());
+    }
+
+    // Decide whether to render based on pending size or debounce window
+    fn maybe_stream(&mut self, attr: Option<Attribute>, spn: &mut SpinnerManager) {
+        let should_stream = match self.last_stream_at {
+            None => true, // Always render the first time
+            Some(ts) => {
+                self.pending_bytes >= self.coalesce_bytes || ts.elapsed() >= self.coalesce_window
+            }
+        };
+
+        if should_stream {
+            let rendered = self.renderer.render(&self.buffer, attr);
+            self.stream(&rendered, spn);
+            self.pending_bytes = 0;
+            self.last_stream_at = Some(Instant::now());
+        }
     }
 
     fn stream(&mut self, content: &str, spn: &mut SpinnerManager) {
@@ -70,6 +127,7 @@ impl<W: std::io::Write> MarkdownWriter<W> {
 
         // Hide the cursor
         write!(self.writer, "\x1b[?25l");
+        // thread::sleep(Duration::from_millis(200));
         spn.suspend(|| {
             let common = lines_prev
                 .iter()
@@ -85,15 +143,15 @@ impl<W: std::io::Write> MarkdownWriter<W> {
             if up_lines > lines_to_update {
                 skip = up_lines - lines_to_update;
             }
-            let up_lines = (lines_prev.len() - common) - skip + 1;
+            let mut up_lines = (lines_prev.len() - common) - skip + 1;
             if up_lines > 0 {
                 execute!(self.writer, MoveUp(up_lines as u16)).unwrap();
             }
-            execute!(
+            /*execute!(
                 self.writer,
                 Clear(crossterm::terminal::ClearType::FromCursorDown)
             )
-            .unwrap();
+            .unwrap();*/
             for line in lines_new[common + skip..].iter() {
                 writeln!(self.writer, "{}", line).unwrap();
             }
