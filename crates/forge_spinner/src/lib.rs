@@ -2,10 +2,10 @@ use std::time::Instant;
 
 use anyhow::Result;
 use colored::Colorize;
+use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use indicatif::{ProgressBar, ProgressStyle};
 use rand::seq::IndexedRandom;
 use tokio::task::JoinHandle;
-
 /// Manages spinner functionality for the UI
 #[derive(Default)]
 pub struct SpinnerManager {
@@ -22,6 +22,7 @@ impl SpinnerManager {
     /// Start the spinner with a message
     pub fn start(&mut self, message: Option<&str>) -> Result<()> {
         self.stop(None)?;
+        enable_raw_mode()?;
         let words = [
             "Thinking",
             "Processing",
@@ -107,6 +108,7 @@ impl SpinnerManager {
 
     /// Stop the active spinner if any
     pub fn stop(&mut self, message: Option<String>) -> Result<()> {
+        disable_raw_mode()?;
         if let Some(spinner) = self.spinner.take() {
             // Always finish the spinner first
             spinner.finish_and_clear();
