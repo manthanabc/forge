@@ -8,6 +8,17 @@ use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use rand::seq::IndexedRandom;
 
+/// Render the spinner line consistently with styling and flush.
+fn render_spinner_line(frame: &str, status: &str, seconds: u64) {
+    // Clear current line, then render spinner + message + timer + hint
+    print!("\r\x1b[2K");
+    print!(
+        "\r\x1b[32m{}\x1b[0m  \x1b[1;32m{}\x1b[0m {}s · \x1b[2;37mCtrl+C to interrupt\x1b[0m",
+        frame, status, seconds
+    );
+    let _ = io::stdout().flush();
+}
+
 /// Commands for the spinner background thread
 enum Cmd {
     Write(String),
@@ -29,8 +40,10 @@ impl SpinnerManager {
         Self::default()
     }
     /// Start the spinner with a message (API preserved).
-    /// Behavior mirrors markdown_renderer: draws an in-place spinner line,
-    /// writes print above it, hides cursor, and handles Ctrl-C.
+    /// Behavior mirrors the old spinner visuals while keeping modern flow:
+    /// draws an in-place spinner line, supports printing above it, hides
+    /// cursor, shows a seconds timer and "Ctrl+C to interrupt", and handles
+    /// Ctrl-C.
     pub fn start(&mut self, message: Option<&str>) -> Result<()> {
         // Stop any existing spinner first (preserves API behavior)
         self.stop(None)?;
@@ -57,15 +70,17 @@ impl SpinnerManager {
         let (tx, rx) = mpsc::channel::<Cmd>();
 
         let handle = thread::spawn(move || {
-            let spinner_frames: [&str; 8] = ["⠁", "⠂", "⠄", "⡀", "⢀", "⠠", "⠐", "⠈"];
+            // Old visual: frames and pace
+            let spinner_frames: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
             let mut idx: usize = 0;
-            let tick = Duration::from_millis(80);
+            let tick = Duration::from_millis(60);
             let mut last = std::time::Instant::now();
+            let start_time = std::time::Instant::now();
 
             // Hide cursor and draw initial spinner line
             print!("\x1b[?25l");
-            print!("\r{}  {}", spinner_frames[idx], status_text);
-            let _ = io::stdout().flush();
+            let seconds = 0u64;
+            render_spinner_line(spinner_frames[idx], &status_text, seconds);
 
             let mut keep_running = true;
             let mut ctrl_c = false;
@@ -74,15 +89,15 @@ impl SpinnerManager {
                 match rx.recv_timeout(Duration::from_millis(5)) {
                     Ok(Cmd::Write(s)) => {
                         // Print above spinner then redraw spinner line
-                        // execute!(self.wwriter, MoveToColumn(0));
                         print!("\r\x1b[2K");
                         if !s.ends_with('\n') {
                             print!("{}\n", s);
                         } else {
                             print!("{}", s);
                         }
-                        print!("\r{}  {}", spinner_frames[idx], status_text);
-                        let _ = io::stdout().flush();
+                        // Redraw spinner line with current visuals
+                        let elapsed = start_time.elapsed().as_secs();
+                        render_spinner_line(spinner_frames[idx], &status_text, elapsed);
                     }
                     Ok(Cmd::Flush(ack)) => {
                         let _ = ack.send(());
@@ -115,8 +130,9 @@ impl SpinnerManager {
 
                 if keep_running && last.elapsed() >= tick {
                     idx = (idx + 1) % spinner_frames.len();
-                    print!("\r{}  {}", spinner_frames[idx], status_text);
-                    let _ = io::stdout().flush();
+                    let elapsed = start_time.elapsed().as_secs();
+                    // Redraw the full spinner line to avoid artifacts
+                    render_spinner_line(spinner_frames[idx], &status_text, elapsed);
                     last = std::time::Instant::now();
                 }
 
@@ -131,6 +147,10 @@ impl SpinnerManager {
             let _ = io::stdout().flush();
 
             if ctrl_c {
+                // Cleanup: clear line and show cursor and disable raw mode
+                print!("\r\x1b[2K");
+                print!("\x1b[?25h");
+                let _ = disable_raw_mode();
                 // Exit with 130 to emulate SIGINT after cleanup
                 std::process::exit(130);
             }
@@ -171,7 +191,7 @@ impl SpinnerManager {
             // Write above spinner while it continues running
             let _ = tx.send(Cmd::Write(s));
         } else {
-            println!("b{}", s);
+            println!("{}", s);
         }
         Ok(())
     }
