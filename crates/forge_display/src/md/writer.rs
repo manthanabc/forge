@@ -3,27 +3,25 @@ use termimad::crossterm::style::Attribute;
 
 use crate::md::render::MarkdownRenderer;
 
-pub struct MarkdownWriter<W> {
+pub struct MarkdownWriter {
     buffer: String,
     renderer: MarkdownRenderer,
     previous_rendered: String,
-    writer: W,
     last_was_dimmed: bool,
 }
 
-impl<W> MarkdownWriter<W> {
-    pub fn new(writer: W) -> Self {
+impl MarkdownWriter {
+    pub fn new() -> Self {
         Self {
             buffer: String::new(),
             renderer: MarkdownRenderer::default(),
             previous_rendered: String::new(),
-            writer,
             last_was_dimmed: false,
         }
     }
 }
 
-impl<W: std::io::Write> MarkdownWriter<W> {
+impl MarkdownWriter {
     #[cfg(test)]
     fn with_renderer(mut self, renderer: MarkdownRenderer) -> Self {
         self.renderer = renderer;

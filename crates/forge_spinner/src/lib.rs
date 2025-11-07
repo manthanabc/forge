@@ -39,17 +39,13 @@ impl SpinnerManager {
     pub fn new() -> Self {
         Self::default()
     }
-    /// Start the spinner with a message (API preserved).
-    /// Behavior mirrors the old spinner visuals while keeping modern flow:
-    /// draws an in-place spinner line, supports printing above it, hides
-    /// cursor, shows a seconds timer and "Ctrl+C to interrupt", and handles
-    /// Ctrl-C.
+    /// Start the spinner with a message
     pub fn start(&mut self, message: Option<&str>) -> Result<()> {
-        // Stop any existing spinner first (preserves API behavior)
         self.stop(None)?;
+
+        // Enter raw mode
         enable_raw_mode()?;
 
-        // Choose default word if none provided (keeps prior semantics)
         let words = [
             "Thinking",
             "Processing",
@@ -60,6 +56,8 @@ impl SpinnerManager {
             "Reasoning",
             "Contemplating",
         ];
+
+        // Use a random word from the list
         let word = match message {
             None => words.choose(&mut rand::rng()).unwrap_or(&words[0]),
             Some(msg) => msg,
@@ -162,7 +160,7 @@ impl SpinnerManager {
         Ok(())
     }
 
-    /// Stop the active spinner if any (API preserved).
+    /// Stop the active spinner if any
     pub fn stop(&mut self, message: Option<String>) -> Result<()> {
         // Signal spinner thread to stop and join it
         if let Some(tx) = self.tx.take() {
@@ -172,7 +170,7 @@ impl SpinnerManager {
             let _ = handle.join();
         }
 
-        // Restore terminal mode after spinner thread cleanup
+        // Restore terminal mode
         let _ = disable_raw_mode();
 
         // Print trailing message if provided

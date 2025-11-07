@@ -61,8 +61,6 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
         let mut buffering_started = false;
         let mut last_was_reasoning = false;
 
-        let mut first = true;
-
         while let Some(message) = self.next().await {
             let message =
                 anyhow::Ok(message?).with_context(|| "Failed to process message stream")?;
@@ -76,10 +74,6 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
                 && let Some(ref sender) = sender
                 && !reasoning.is_empty()
             {
-                if first {
-                    let _ = sender.send(Ok(ChatResponse::StartOfStream)).await;
-                    first = false;
-                }
                 let _ = sender
                     .send(Ok(ChatResponse::TaskReasoning {
                         content: reasoning.as_str().to_string(),
@@ -113,11 +107,6 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
                         };
                         content_buffered.clear();
 
-                        if first {
-                            let _ = sender.send(Ok(ChatResponse::StartOfStream)).await;
-                            first = false;
-                        }
-
                         let _ = sender
                             .send(Ok(ChatResponse::TaskMessage {
                                 content: ChatResponseContent::Markdown(prefixed_content),
@@ -138,13 +127,6 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
                             xml_tool_calls = Some(tool_call);
                             tool_interrupted = true;
                         }
-                    }
-                    if !message.tool_calls.is_empty()
-                        && !first
-                        && let Some(ref sender) = sender
-                    {
-                        let _ = sender.send(Ok(ChatResponse::EndOfStream)).await;
-                        first = true;
                     }
                 }
             }
@@ -168,9 +150,6 @@ impl ResultStreamExt<anyhow::Error> for crate::BoxStream<ChatCompletionMessage, 
                     content: ChatResponseContent::Markdown(cleaned_content),
                 }))
                 .await;
-        }
-        if !first && let Some(ref sender) = sender {
-            let _ = sender.send(Ok(ChatResponse::EndOfStream)).await;
         }
 
         // Get the full content from all messages
@@ -873,10 +852,8 @@ mod tests {
             sent_messages.push(msg);
         }
 
-        // Expected: StartOfStream, Reasoning sent first, then buffered content with
         // newline prefix
         assert_eq!(sent_messages.len(), 4);
-        assert!(matches!(sent_messages[0], Ok(ChatResponse::StartOfStream)));
         assert!(matches!(
             sent_messages[1],
             Ok(ChatResponse::TaskReasoning { .. })
@@ -913,10 +890,8 @@ mod tests {
             sent_messages.push(msg);
         }
 
-        // Expected: StartOfStream, Reasoning sent first, then buffered content with
         // newline prefix
         assert_eq!(sent_messages.len(), 5);
-        assert!(matches!(sent_messages[0], Ok(ChatResponse::StartOfStream)));
         assert!(matches!(
             sent_messages[1],
             Ok(ChatResponse::TaskReasoning { .. })
@@ -953,10 +928,8 @@ mod tests {
             sent_messages.push(msg);
         }
 
-        // Expected: StartOfStream, Reasoning sent first, then content with newline
         // prefix
         assert_eq!(sent_messages.len(), 4);
-        assert!(matches!(sent_messages[0], Ok(ChatResponse::StartOfStream)));
         assert!(matches!(
             sent_messages[1],
             Ok(ChatResponse::TaskReasoning { .. })
@@ -994,10 +967,8 @@ mod tests {
             sent_messages.push(msg);
         }
 
-        // Expected: StartOfStream, Reasoning sent first, then buffered content at end
         // with newline prefix
         assert_eq!(sent_messages.len(), 4);
-        assert!(matches!(sent_messages[0], Ok(ChatResponse::StartOfStream)));
         assert!(matches!(
             sent_messages[1],
             Ok(ChatResponse::TaskReasoning { .. })

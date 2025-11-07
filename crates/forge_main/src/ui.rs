@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::fmt::Display;
-use std::io::Stdout;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -46,7 +45,7 @@ use crate::update::on_update;
 use crate::{TRACKER, banner, tracker};
 
 pub struct UI<A, F: Fn() -> A> {
-    markdown: MarkdownWriter<Stdout>,
+    markdown: MarkdownWriter,
     state: UIState,
     api: Arc<F::Output>,
     new_api: Arc<F>,
@@ -163,7 +162,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             cli,
             command,
             spinner: SpinnerManager::new(),
-            markdown: MarkdownWriter::new(std::io::stdout()),
+            markdown: MarkdownWriter::new(),
             _guard: forge_tracker::init_tracing(env.log_path(), TRACKER.clone())?,
         })
     }
@@ -1915,8 +1914,10 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 }
             }
         }
+
         self.markdown.reset();
         self.spinner.stop(None)?;
+
         Ok(())
     }
 
@@ -2036,12 +2037,6 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 if let Some(conversation_id) = self.state.conversation_id {
                     self.on_show_conv_info(conversation_id).await?;
                 }
-            }
-            ChatResponse::StartOfStream => {
-                // self.spinner.stop(None)?;
-            }
-            ChatResponse::EndOfStream => {
-                // self.spinner.start(None)?;
             }
         }
         Ok(())
