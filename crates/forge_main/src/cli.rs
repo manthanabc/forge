@@ -3,6 +3,9 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand, ValueEnum};
 use forge_domain::AgentId;
 
+/// NOTE: Always use singular names for commands and subcommands.
+/// For example: `forge provider login` instead of `forge providers login`.
+
 #[derive(Parser)]
 #[command(version = env!("CARGO_PKG_VERSION"))]
 pub struct Cli {
@@ -102,6 +105,11 @@ pub enum TopLevelCommand {
         porcelain: bool,
     },
 
+    /// Display environment information
+    ///
+    /// Example: forge env
+    Env,
+
     /// Configuration management commands
     Config(ConfigCommandGroup),
 
@@ -111,6 +119,9 @@ pub enum TopLevelCommand {
 
     /// MCP server management commands
     Mcp(McpCommandGroup),
+
+    /// Provider management commands
+    Provider(ProviderCommandGroup),
 }
 
 /// Group of list-related commands
@@ -128,24 +139,27 @@ pub struct ListCommandGroup {
 pub enum ListCommand {
     /// List all available agents
     ///
-    /// Example: forge list agents
-    Agents,
+    /// Example: forge list agent
+    #[command(alias = "agents")]
+    Agent,
 
     /// List all available providers
     ///
-    /// Example: forge list providers
-    Providers,
+    /// Example: forge list provider
+    #[command(alias = "providers")]
+    Provider,
 
     /// List all available models
     ///
-    /// Example: forge list models
-    Models,
+    /// Example: forge list model
+    #[command(alias = "models")]
+    Model,
 
     /// List all available commands
     ///
-    /// Example: forge list commands
-    #[command(hide = true)]
-    Commands,
+    /// Example: forge list command
+    #[command(hide = true, alias = "commands")]
+    Command,
 
     /// List current configuration values
     ///
@@ -154,8 +168,9 @@ pub enum ListCommand {
 
     /// List all tools for a specific agent
     ///
-    /// Example: forge list tools sage
-    Tools {
+    /// Example: forge list tool sage
+    #[command(alias = "tools")]
+    Tool {
         /// Agent ID to show tools for
         agent: AgentId,
     },
@@ -385,6 +400,35 @@ pub enum ConversationCommand {
     },
 }
 
+/// Group of Provider-related commands
+#[derive(Parser, Debug, Clone)]
+pub struct ProviderCommandGroup {
+    #[command(subcommand)]
+    pub command: ProviderCommand,
+
+    /// Output in machine-readable format (porcelain)
+    #[arg(long, global = true)]
+    pub porcelain: bool,
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum ProviderCommand {
+    /// Login to a provider by selecting from available options
+    ///
+    /// Example: forge provider login
+    Login,
+
+    /// Remove a configured provider (logout)
+    ///
+    /// Example: forge provider logout
+    Logout,
+
+    /// List all available providers
+    ///
+    /// Example: forge provider list
+    List,
+}
+
 #[cfg(test)]
 mod tests {
     use clap::Parser;
@@ -586,10 +630,10 @@ mod tests {
 
     #[test]
     fn test_list_tools_command_with_agent() {
-        let fixture = Cli::parse_from(["forge", "list", "tools", "sage"]);
+        let fixture = Cli::parse_from(["forge", "list", "tool", "sage"]);
         let actual = match fixture.subcommands {
             Some(TopLevelCommand::List(list)) => match list.command {
-                ListCommand::Tools { agent } => agent,
+                ListCommand::Tool { agent } => agent,
                 _ => AgentId::default(),
             },
             _ => AgentId::default(),

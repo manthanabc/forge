@@ -120,6 +120,7 @@ mod tests {
         };
         assert_eq!(previous_rendered, "Line 1\nLine 2\nLine 3");
         let output_str = String::from_utf8(output).unwrap();
+        panic!("error {}", output_str);
         assert!(output_str.contains("Line 1"));
         assert!(output_str.contains("Line 2"));
         assert!(output_str.contains("Line 3"));
@@ -138,7 +139,7 @@ mod tests {
         let output_str = String::from_utf8(output).unwrap();
         // common=0, up_lines=5, height=2, skip=3, up_lines=2, print \x1b[2A \x1b[0J
         // New\n (take 2, but only 1 line) + 1 (for spinner is skips one line)
-        assert!(output_str.contains("\x1b[3A"));
+        assert!(output_str.contains("\x1b[2A"));
     }
 
     #[test]

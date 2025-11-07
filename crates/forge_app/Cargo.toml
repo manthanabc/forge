@@ -36,7 +36,8 @@ reqwest.workspace = true
 bytes.workspace = true
 reqwest-eventsource.workspace = true
 schemars.workspace = true
-globset.workspace = true
+glob.workspace = true
+lazy_static.workspace = true
 
 
 [dev-dependencies]
