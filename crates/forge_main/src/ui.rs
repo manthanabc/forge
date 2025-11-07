@@ -1630,8 +1630,8 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
 
         let info = Info::default().extend(&conversation);
 
-        self.writeln(info)?;
         self.spinner.stop(None)?;
+        self.writeln(info)?;
 
         // Only prompt for new conversation if in interactive mode and prompt is enabled
         if self.cli.is_interactive() {

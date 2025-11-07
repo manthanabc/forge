@@ -1,6 +1,3 @@
-use crossterm::cursor::{MoveToColumn, MoveUp, Hide};
-use crossterm::execute;
-use crossterm::terminal::Clear;
 use forge_spinner::SpinnerManager;
 use termimad::crossterm::style::Attribute;
 
@@ -60,49 +57,46 @@ impl<W: std::io::Write> MarkdownWriter<W> {
     }
 
     fn stream(&mut self, content: &str, spn: &mut SpinnerManager) {
-        let rendered_lines: Vec<&str> = content.lines().collect();
-        let lines_new: Vec<&str> = rendered_lines;
+        let lines_new: Vec<&str> = content.lines().collect();
         let lines_prev: Vec<String> = self
             .previous_rendered
             .lines()
             .map(|s| s.to_string())
             .collect();
 
-        execute!(self.writer, Hide).unwrap();
-        spn.suspend(|| {
-            let common = lines_prev
-                .iter()
-                .map(|s| s.as_str())
-                .zip(&lines_new)
-                .take_while(|(p, n)| p == *n)
-                .count();
+        // Compute common prefix to minimize redraw
+        let common = lines_prev
+            .iter()
+            .map(|s| s.as_str())
+            .zip(&lines_new)
+            .take_while(|(p, n)| p == *n)
+            .count();
 
-            let lines_to_update = self.renderer.height;
-            let mut skip = 0;
-            let up_lines = lines_prev.len() - common;
+        let lines_to_update = self.renderer.height;
+        let mut skip = 0;
+        let up_base = lines_prev.len().saturating_sub(common);
+        if up_base > lines_to_update {
+            skip = up_base - lines_to_update;
+        }
+        let up_lines = up_base.saturating_sub(skip) + 1; // +1 to account for spinner line
 
-            if up_lines > lines_to_update {
-                skip = up_lines - lines_to_update;
-            }
-            let up_lines = (lines_prev.len() - common) - skip + 1;
-            if up_lines > 0 {
-                execute!(self.writer, MoveUp(up_lines as u16)).unwrap();
-            }
-            execute!(
-                self.writer,
-                Clear(crossterm::terminal::ClearType::FromCursorDown)
-            )
-            .unwrap();
-            for line in lines_new[common + skip..].iter() {
-                writeln!(self.writer, "{}", line).unwrap();
-                execute!(self.writer, MoveToColumn(0)).unwrap();
-            }
-            writeln!(self.writer, "\r").unwrap();
-            // writeln!(self.writer).unwrap();
-            // self.writer.flush().unwrap();
-            // disable_raw_mode().unwrap();
-            self.previous_rendered = content.to_string();
-        })
+        // Build ANSI sequence payload to write via spinner API
+        let mut out = String::new();
+        if up_lines > 0 {
+            out.push_str(&format!("\x1b[{}A", up_lines)); // move up
+        }
+        out.push_str("\x1b[0J"); // clear from cursor down
+        for line in lines_new.iter().skip(common + skip) {
+            out.push_str(line);
+            out.push('\n');
+            out.push_str("\x1b[0G"); // move to column 0
+        }
+        out.push_str("\r"); // return carriage; spinner will add newline
+
+        // Write above spinner; spinner will redraw itself
+        let _ = spn.write_ln(out);
+
+        self.previous_rendered = content.to_string();
     }
 }
 
