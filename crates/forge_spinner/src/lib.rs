@@ -23,6 +23,8 @@ fn render_spinner_line(frame: &str, status: &str, seconds: u64) {
 enum Cmd {
     Write(String),
     Flush(mpsc::Sender<()>),
+    Pause,
+    Resume,
     Stop,
 }
 
@@ -33,6 +35,7 @@ pub struct SpinnerManager {
     handle: Option<JoinHandle<()>>, // spinner thread handle
     message: Option<String>,        // current status text
     running: bool,
+    paused: bool,
 }
 
 impl SpinnerManager {
@@ -81,6 +84,7 @@ impl SpinnerManager {
             render_spinner_line(spinner_frames[idx], &status_text, seconds);
 
             let mut keep_running = true;
+            let mut paused = false;
             let mut ctrl_c = false;
             while keep_running {
                 // Handle incoming commands quickly
@@ -93,12 +97,33 @@ impl SpinnerManager {
                         } else {
                             print!("{}", s);
                         }
-                        // Redraw spinner line with current visuals
-                        let elapsed = start_time.elapsed().as_secs();
-                        render_spinner_line(spinner_frames[idx], &status_text, elapsed);
+                        // Redraw spinner line with current visuals only if not paused
+                        if !paused {
+                            let elapsed = start_time.elapsed().as_secs();
+                            render_spinner_line(spinner_frames[idx], &status_text, elapsed);
+                        } else {
+                            let _ = io::stdout().flush();
+                        }
                     }
                     Ok(Cmd::Flush(ack)) => {
                         let _ = ack.send(());
+                    }
+                    Ok(Cmd::Pause) => {
+                        // Clear spinner line and show cursor; exit raw mode for clean external
+                        // output
+                        print!("\r\x1b[2K");
+                        print!("\x1b[?25h");
+                        let _ = io::stdout().flush();
+                        let _ = disable_raw_mode();
+                        paused = true;
+                    }
+                    Ok(Cmd::Resume) => {
+                        // Re-enter raw mode, hide cursor, and redraw spinner line
+                        let _ = enable_raw_mode();
+                        print!("\x1b[?25l");
+                        let elapsed = start_time.elapsed().as_secs();
+                        render_spinner_line(spinner_frames[idx], &status_text, elapsed);
+                        paused = false;
                     }
                     Ok(Cmd::Stop) => {
                         keep_running = false;
@@ -126,7 +151,7 @@ impl SpinnerManager {
                     }
                 }
 
-                if keep_running && last.elapsed() >= tick {
+                if keep_running && !paused && last.elapsed() >= tick {
                     idx = (idx + 1) % spinner_frames.len();
                     let elapsed = start_time.elapsed().as_secs();
                     // Redraw the full spinner line to avoid artifacts
@@ -146,8 +171,6 @@ impl SpinnerManager {
 
             if ctrl_c {
                 // Cleanup: clear line and show cursor and disable raw mode
-                print!("\r\x1b[2K");
-                print!("\x1b[?25h");
                 let _ = disable_raw_mode();
                 // Exit with 130 to emulate SIGINT after cleanup
                 std::process::exit(130);
@@ -157,6 +180,7 @@ impl SpinnerManager {
         self.tx = Some(tx);
         self.handle = Some(handle);
         self.running = true;
+        self.paused = false;
         Ok(())
     }
 
@@ -180,16 +204,40 @@ impl SpinnerManager {
 
         self.running = false;
         self.message = None;
+        self.paused = false;
         Ok(())
     }
 
     pub fn write_ln(&mut self, message: impl ToString) -> Result<()> {
         let s = message.to_string();
+        let normalized = s.replace('\n', "\n\x1b[0G");
+
         if let Some(tx) = &self.tx {
-            // Write above spinner while it continues running
-            let _ = tx.send(Cmd::Write(s));
+            let _ = tx.send(Cmd::Write(normalized));
         } else {
-            println!("{}", s);
+            println!("{}", normalized);
+        }
+        Ok(())
+    }
+
+    /// Pause the spinner without resetting the timer.
+    pub fn pause(&mut self) -> Result<()> {
+        if self.running && !self.paused {
+            if let Some(tx) = &self.tx {
+                let _ = tx.send(Cmd::Pause);
+            }
+            self.paused = true;
+        }
+        Ok(())
+    }
+
+    /// Resume a previously paused spinner, keeping the elapsed time.
+    pub fn resume(&mut self) -> Result<()> {
+        if self.running && self.paused {
+            if let Some(tx) = &self.tx {
+                let _ = tx.send(Cmd::Resume);
+            }
+            self.paused = false;
         }
         Ok(())
     }

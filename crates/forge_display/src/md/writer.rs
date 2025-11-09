@@ -112,7 +112,7 @@ mod tests {
         let mut output = Vec::new();
         let mut spn = SpinnerManager::new();
         let previous_rendered = {
-            let mut writer = MarkdownWriter::new(Box::new(Cursor::new(&mut output)));
+            let mut writer = MarkdownWriter::new();
             writer.stream("Line 1\nLine 2\nLine 3", &mut spn);
             writer.previous_rendered.clone()
         };

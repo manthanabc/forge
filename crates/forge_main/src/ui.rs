@@ -1985,8 +1985,9 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                     self.markdown.add_chunk(&text, &mut self.spinner);
                 }
             },
-            ChatResponse::ToolCallStart(_) => {
-                self.spinner.stop(None)?;
+            ChatResponse::ToolCallStart(call) => {
+                // Hide spinner while tool call
+                let _ = self.spinner.pause();
             }
             ChatResponse::ToolCallEnd(toolcall_result) => {
                 // Only track toolcall name in case of success else track the error.
@@ -2001,7 +2002,9 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 };
                 tracker::tool_call(payload);
 
-                self.spinner.start(None)?;
+                // Resume the spinner as tool call is over
+                let _ = self.spinner.resume();
+
                 if !self.cli.verbose {
                     return Ok(());
                 }
