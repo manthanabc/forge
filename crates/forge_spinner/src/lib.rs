@@ -146,8 +146,6 @@ impl SpinnerManager {
 
             if ctrl_c {
                 // Cleanup: clear line and show cursor and disable raw mode
-                print!("\r\x1b[2K");
-                print!("\x1b[?25h");
                 let _ = disable_raw_mode();
                 // Exit with 130 to emulate SIGINT after cleanup
                 std::process::exit(130);
