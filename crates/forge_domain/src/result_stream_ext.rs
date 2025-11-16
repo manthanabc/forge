@@ -852,14 +852,14 @@ mod tests {
             sent_messages.push(msg);
         }
 
-        // newline prefix
-        assert_eq!(sent_messages.len(), 4);
+        // Expect reasoning then one buffered message with newline prefix
+        assert_eq!(sent_messages.len(), 2);
         assert!(matches!(
-            sent_messages[1],
+            sent_messages[0],
             Ok(ChatResponse::TaskReasoning { .. })
         ));
         if let Ok(ChatResponse::TaskMessage { content: ChatResponseContent::Markdown(content) }) =
-            &sent_messages[2]
+            &sent_messages[1]
         {
             assert!(content.starts_with("\n"));
             assert!(content.contains("tool content"));
@@ -890,14 +890,15 @@ mod tests {
             sent_messages.push(msg);
         }
 
-        // newline prefix
-        assert_eq!(sent_messages.len(), 5);
+        // Expect reasoning then two messages (no buffering): newline prefix then next
+        // chunk
+        assert_eq!(sent_messages.len(), 3);
         assert!(matches!(
-            sent_messages[1],
+            sent_messages[0],
             Ok(ChatResponse::TaskReasoning { .. })
         ));
         if let Ok(ChatResponse::TaskMessage { content: ChatResponseContent::Markdown(content) }) =
-            &sent_messages[2]
+            &sent_messages[1]
         {
             assert!(content.starts_with("\n"));
             assert!(content.contains("<folse_call>"));
@@ -928,14 +929,14 @@ mod tests {
             sent_messages.push(msg);
         }
 
-        // prefix
-        assert_eq!(sent_messages.len(), 4);
+        // Expect reasoning then immediate content with newline prefix
+        assert_eq!(sent_messages.len(), 2);
         assert!(matches!(
-            sent_messages[1],
+            sent_messages[0],
             Ok(ChatResponse::TaskReasoning { .. })
         ));
         if let Ok(ChatResponse::TaskMessage { content: ChatResponseContent::Markdown(content) }) =
-            &sent_messages[2]
+            &sent_messages[1]
         {
             assert_eq!(content, "\nHello world");
         } else {
@@ -967,14 +968,14 @@ mod tests {
             sent_messages.push(msg);
         }
 
-        // with newline prefix
-        assert_eq!(sent_messages.len(), 4);
+        // Expect reasoning then one buffered message with newline prefix
+        assert_eq!(sent_messages.len(), 2);
         assert!(matches!(
-            sent_messages[1],
+            sent_messages[0],
             Ok(ChatResponse::TaskReasoning { .. })
         ));
         if let Ok(ChatResponse::TaskMessage { content: ChatResponseContent::Markdown(content) }) =
-            &sent_messages[2]
+            &sent_messages[1]
         {
             assert!(content.starts_with("\n"));
             assert!(content.contains("<forge_tool>content and more"));

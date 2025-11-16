@@ -22,7 +22,6 @@ fn render_spinner_line(frame: &str, status: &str, seconds: u64) {
 /// Commands for the spinner background thread
 enum Cmd {
     Write(String),
-    Flush(mpsc::Sender<()>),
     Pause,
     Resume,
     Stop,
@@ -92,11 +91,7 @@ impl SpinnerManager {
                     Ok(Cmd::Write(s)) => {
                         // Print above spinner then redraw spinner line
                         print!("\r\x1b[2K");
-                        if !s.ends_with('\n') {
-                            print!("{}\n", s);
-                        } else {
-                            print!("{}", s);
-                        }
+                        println!("{}", s);
                         // Redraw spinner line with current visuals only if not paused
                         if !paused {
                             let elapsed = start_time.elapsed().as_secs();
@@ -104,9 +99,6 @@ impl SpinnerManager {
                         } else {
                             let _ = io::stdout().flush();
                         }
-                    }
-                    Ok(Cmd::Flush(ack)) => {
-                        let _ = ack.send(());
                     }
                     Ok(Cmd::Pause) => {
                         // Clear spinner line and show cursor; exit raw mode for clean external
@@ -140,10 +132,10 @@ impl SpinnerManager {
                 while event::poll(Duration::from_millis(0)).unwrap_or(false) {
                     match event::read() {
                         Ok(Event::Key(key)) => {
-                            if key.modifiers.contains(KeyModifiers::CONTROL) {
-                                if let KeyCode::Char('c') | KeyCode::Char('C') = key.code {
-                                    ctrl_c = true;
-                                }
+                            if key.modifiers.contains(KeyModifiers::CONTROL)
+                                && let KeyCode::Char('c') | KeyCode::Char('C') = key.code
+                            {
+                                ctrl_c = true;
                             }
                         }
                         Ok(_) => {}

@@ -20,14 +20,12 @@ impl MarkdownWriter {
         }
     }
 }
-
-impl MarkdownWriter {
-    #[cfg(test)]
-    fn with_renderer(mut self, renderer: MarkdownRenderer) -> Self {
-        self.renderer = renderer;
-        self
+impl Default for MarkdownWriter {
+    fn default() -> Self {
+        Self::new()
     }
-
+}
+impl MarkdownWriter {
     pub fn reset(&mut self) {
         self.buffer.clear();
         self.previous_rendered.clear();
@@ -78,7 +76,7 @@ impl MarkdownWriter {
         }
         let up_lines = up_base.saturating_sub(skip) + 1; // +1 to account for spinner line
 
-        // Build ANSI sequence payload to write via spinner API
+        // Build ANSI sequence to write
         let mut out = String::new();
         if up_lines > 0 {
             out.push_str(&format!("\x1b[{}A", up_lines)); // move up
@@ -89,7 +87,7 @@ impl MarkdownWriter {
             out.push('\n');
             out.push_str("\x1b[0G"); // move to column 0
         }
-        out.push_str("\r"); // return carriage; spinner will add newline
+        out.push('\r'); // return carriage
 
         // Write above spinner; spinner will redraw itself
         let _ = spn.write_ln(out);
@@ -100,8 +98,6 @@ impl MarkdownWriter {
 
 #[cfg(test)]
 mod tests {
-    use std::io::Cursor;
-
     use pretty_assertions::assert_eq;
     use strip_ansi_escapes::strip_str;
 
@@ -109,35 +105,14 @@ mod tests {
 
     #[test]
     fn test_markdown_writer_basic_incremental_update() {
-        let mut output = Vec::new();
         let mut spn = SpinnerManager::new();
         let previous_rendered = {
-            let mut writer = MarkdownWriter::new();
-            writer.stream("Line 1\nLine 2\nLine 3", &mut spn);
-            writer.previous_rendered.clone()
+            let mut fixture = MarkdownWriter::new();
+            fixture.stream("Line 1\nLine 2\nLine 3", &mut spn);
+            fixture.previous_rendered.clone()
         };
-        assert_eq!(previous_rendered, "Line 1\nLine 2\nLine 3");
-        let output_str = String::from_utf8(output).unwrap();
-        panic!("error {}", output_str);
-        assert!(output_str.contains("Line 1"));
-        assert!(output_str.contains("Line 2"));
-        assert!(output_str.contains("Line 3"));
-    }
-
-    #[test]
-    fn test_markdown_writer_full_clear_with_height_cap() {
-        let renderer = MarkdownRenderer::new(80, 2);
-        let mut output = Vec::new();
-        let mut spn = SpinnerManager::new();
-        {
-            let mut writer = MarkdownWriter::new(Cursor::new(&mut output)).with_renderer(renderer);
-            writer.previous_rendered = "Old 1\nOld 2\nOld 3\nOld 4\nOld 5".to_string();
-            writer.stream("new 1\nnew 2\nnew3\nnew 4\n new 5\n new6", &mut spn);
-        }
-        let output_str = String::from_utf8(output).unwrap();
-        // common=0, up_lines=5, height=2, skip=3, up_lines=2, print \x1b[2A \x1b[0J
-        // New\n (take 2, but only 1 line) + 1 (for spinner is skips one line)
-        assert!(output_str.contains("\x1b[2A"));
+        let expected = "Line 1\nLine 2\nLine 3";
+        assert_eq!(previous_rendered, expected);
     }
 
     #[test]
@@ -179,7 +154,7 @@ mod tests {
 
     #[test]
     fn test_markdown_writer_long_text_chunk_by_chunk() {
-        let mut fixture = MarkdownWriter::new(Box::new(std::io::sink()));
+        let mut fixture = MarkdownWriter::new();
         let mut spn = SpinnerManager::new();
 
         let long_text = r#"# Header

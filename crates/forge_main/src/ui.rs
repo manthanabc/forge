@@ -1985,7 +1985,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                     self.markdown.add_chunk(&text, &mut self.spinner);
                 }
             },
-            ChatResponse::ToolCallStart(call) => {
+            ChatResponse::ToolCallStart(_) => {
                 // Hide spinner while tool call
                 let _ = self.spinner.pause();
             }
