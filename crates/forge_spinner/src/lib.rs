@@ -44,7 +44,7 @@ impl SpinnerManager {
     /// Start the spinner with a message
     pub fn start(&mut self, message: Option<&str>) -> Result<()> {
         self.stop(None)?;
-        print!("\n");
+        println!();
         // Enter raw mode
         enable_raw_mode()?;
 
@@ -213,14 +213,9 @@ impl SpinnerManager {
     }
 
     pub fn ewrite_ln(&mut self, message: impl ToString) -> Result<()> {
-        let s = message.to_string();
-        let normalized = s.replace('\n', "\n\x1b[0G");
-
-        if let Some(tx) = &self.tx {
-            let _ = tx.send(Cmd::Write(normalized));
-        } else {
-            println!("{}", normalized);
-        }
+        self.pause()?;
+        eprintln!("{}", message.to_string());
+        self.resume()?;
         Ok(())
     }
 
