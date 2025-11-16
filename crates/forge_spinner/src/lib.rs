@@ -212,6 +212,18 @@ impl SpinnerManager {
         Ok(())
     }
 
+    pub fn ewrite_ln(&mut self, message: impl ToString) -> Result<()> {
+        let s = message.to_string();
+        let normalized = s.replace('\n', "\n\x1b[0G");
+
+        if let Some(tx) = &self.tx {
+            let _ = tx.send(Cmd::Write(normalized));
+        } else {
+            println!("{}", normalized);
+        }
+        Ok(())
+    }
+
     /// Pause the spinner without resetting the timer.
     pub fn pause(&mut self) -> Result<()> {
         if self.running && !self.paused {

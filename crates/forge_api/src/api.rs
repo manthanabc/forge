@@ -26,8 +26,19 @@ pub trait API: Sync + Send {
     /// Provides a list of providers available in the current environment
     async fn get_providers(&self) -> Result<Vec<AnyProvider>>;
 
+    /// Gets a provider by ID
+    async fn get_provider(&self, id: &ProviderId) -> Result<AnyProvider>;
+
     /// Executes a chat request and returns a stream of responses
     async fn chat(&self, chat: ChatRequest) -> Result<MpscStream<Result<ChatResponse>>>;
+
+    /// Commits changes with an AI-generated commit message
+    async fn commit(
+        &self,
+        preview: bool,
+        max_diff_size: Option<usize>,
+        diff: Option<String>,
+    ) -> Result<forge_app::CommitResult>;
 
     /// Returns the current environment
     fn environment(&self) -> Environment;
@@ -151,6 +162,9 @@ pub trait API: Sync + Send {
 
     /// List of commands defined in .md file(s)
     async fn get_commands(&self) -> Result<Vec<Command>>;
+
+    /// Generate a shell command from natural language prompt
+    async fn generate_command(&self, prompt: UserPrompt) -> Result<String>;
 
     /// Initiate provider auth flow
     async fn init_provider_auth(
