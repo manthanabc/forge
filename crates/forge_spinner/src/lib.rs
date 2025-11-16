@@ -44,7 +44,7 @@ impl SpinnerManager {
     /// Start the spinner with a message
     pub fn start(&mut self, message: Option<&str>) -> Result<()> {
         self.stop(None)?;
-
+        print!("\n");
         // Enter raw mode
         enable_raw_mode()?;
 
