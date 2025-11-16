@@ -70,11 +70,13 @@ impl MarkdownWriter {
 
         let lines_to_update = self.renderer.height;
         let mut skip = 0;
-        let up_base = lines_prev.len().saturating_sub(common);
+
+        // +1 to consider the spinner
+        let up_base = lines_prev.len().saturating_sub(common) + 1;
         if up_base > lines_to_update {
             skip = up_base - lines_to_update;
         }
-        let up_lines = up_base.saturating_sub(skip) + 1; // +1 to account for spinner line
+        let up_lines = up_base.saturating_sub(skip);
 
         // Build ANSI sequence to write
         let mut out = String::new();
@@ -87,11 +89,9 @@ impl MarkdownWriter {
             out.push('\n');
             out.push_str("\x1b[0G"); // move to column 0
         }
-        out.push('\r'); // return carriage
 
         // Write above spinner; spinner will redraw itself
         let _ = spn.write_ln(out);
-
         self.previous_rendered = content.to_string();
     }
 }

@@ -1987,6 +1987,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             },
             ChatResponse::ToolCallStart(_) => {
                 // Hide spinner while tool call
+                self.markdown.reset();
                 let _ = self.spinner.pause();
             }
             ChatResponse::ToolCallEnd(toolcall_result) => {
