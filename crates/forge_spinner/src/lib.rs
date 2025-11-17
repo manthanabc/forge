@@ -112,7 +112,7 @@ impl SpinnerManager {
                     Ok(Cmd::Resume) => {
                         // Re-enter raw mode, hide cursor, and redraw spinner line
                         let _ = enable_raw_mode();
-                        eprint!("\x1b[?25l");
+                        eprint!("\n\n\x1b[?25l");
                         let elapsed = start_time.elapsed().as_secs();
                         render_spinner_line(spinner_frames[idx], &status_text, elapsed);
                         paused = false;
