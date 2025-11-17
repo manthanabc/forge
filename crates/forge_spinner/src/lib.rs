@@ -11,8 +11,8 @@ use rand::seq::IndexedRandom;
 /// Render the spinner line consistently with styling and flush.
 fn render_spinner_line(frame: &str, status: &str, seconds: u64) {
     // Clear current line, then render spinner + message + timer + hint
-    print!("\r\x1b[2K");
-    print!(
+    eprint!("\r\x1b[2K");
+    eprint!(
         "\r\x1b[32m{}\x1b[0m  \x1b[1;32m{}\x1b[0m {}s · \x1b[2;37mCtrl+C to interrupt\x1b[0m",
         frame, status, seconds
     );
@@ -44,7 +44,7 @@ impl SpinnerManager {
     /// Start the spinner with a message
     pub fn start(&mut self, message: Option<&str>) -> Result<()> {
         self.stop(None)?;
-        println!();
+        eprintln!();
         // Enter raw mode
         enable_raw_mode()?;
 
@@ -78,7 +78,7 @@ impl SpinnerManager {
             let start_time = std::time::Instant::now();
 
             // Hide cursor and draw initial spinner line
-            print!("\x1b[?25l");
+            eprint!("\x1b[?25l");
             let seconds = 0u64;
             render_spinner_line(spinner_frames[idx], &status_text, seconds);
 
@@ -90,7 +90,7 @@ impl SpinnerManager {
                 match rx.recv_timeout(Duration::from_millis(5)) {
                     Ok(Cmd::Write(s)) => {
                         // Print above spinner then redraw spinner line
-                        print!("\r\x1b[2K");
+                        eprint!("\r\x1b[2K");
                         println!("{}", s);
                         // Redraw spinner line with current visuals only if not paused
                         if !paused {
@@ -103,8 +103,8 @@ impl SpinnerManager {
                     Ok(Cmd::Pause) => {
                         // Clear spinner line and show cursor; exit raw mode for clean external
                         // output
-                        print!("\r\x1b[2K");
-                        print!("\x1b[?25h");
+                        eprint!("\r\x1b[2K");
+                        eprint!("\x1b[?25h");
                         let _ = io::stdout().flush();
                         let _ = disable_raw_mode();
                         paused = true;
@@ -112,7 +112,7 @@ impl SpinnerManager {
                     Ok(Cmd::Resume) => {
                         // Re-enter raw mode, hide cursor, and redraw spinner line
                         let _ = enable_raw_mode();
-                        print!("\x1b[?25l");
+                        eprint!("\x1b[?25l");
                         let elapsed = start_time.elapsed().as_secs();
                         render_spinner_line(spinner_frames[idx], &status_text, elapsed);
                         paused = false;
@@ -157,8 +157,8 @@ impl SpinnerManager {
             }
 
             // Cleanup: clear line and show cursor
-            print!("\r\x1b[2K");
-            print!("\x1b[?25h");
+            eprint!("\r\x1b[2K");
+            eprint!("\x1b[?25h");
             let _ = io::stdout().flush();
 
             if ctrl_c {
