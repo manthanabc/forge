@@ -7,6 +7,7 @@ use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use rand::seq::IndexedRandom;
+use tokio::sync::broadcast;
 
 /// Render the spinner line consistently with styling and flush.
 fn render_spinner_line(frame: &str, status: &str, seconds: u64) {
@@ -21,33 +22,148 @@ fn render_spinner_line(frame: &str, status: &str, seconds: u64) {
 
 /// Commands for the spinner background thread
 enum Cmd {
+    Start(String),
     Write(String),
-    Pause,
-    Resume,
+    Hide,
+    Show,
     Stop,
 }
 
 /// Manages spinner functionality for the UI
 #[derive(Default)]
 pub struct SpinnerManager {
-    tx: Option<mpsc::Sender<Cmd>>,  // channel to spinner thread
+    tx: Option<mpsc::Sender<Cmd>>, // channel to spinner thread
     handle: Option<JoinHandle<()>>, // spinner thread handle
-    message: Option<String>,        // current status text
+    message: Option<String>,       // current status text
     running: bool,
-    paused: bool,
+    hidden: bool,
 }
 
 impl SpinnerManager {
     pub fn new() -> Self {
         Self::default()
     }
+
+    /// Initialize the spinner thread and return a receiver for Ctrl+C events
+    pub fn init(&mut self) -> Result<broadcast::Receiver<()>> {
+        let (tx, rx) = mpsc::channel::<Cmd>();
+        let (ctrl_c_tx, ctrl_c_rx) = broadcast::channel(1);
+
+        let handle = thread::spawn(move || {
+            let spinner_frames: [&str; 10] =
+                ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+            let mut idx: usize = 0;
+            let tick = Duration::from_millis(60);
+            let mut last = std::time::Instant::now();
+            let mut start_time = std::time::Instant::now();
+            let mut status_text = String::new();
+            let mut active = false;
+            let mut hidden = false;
+
+            loop {
+                let cmd = if active && !hidden {
+                    rx.recv_timeout(Duration::from_millis(5))
+                } else {
+                    rx.recv().map_err(|_| mpsc::RecvTimeoutError::Disconnected)
+                };
+
+                match cmd {
+                    Ok(Cmd::Start(msg)) => {
+                        status_text = msg;
+                        active = true;
+                        hidden = false;
+                        start_time = std::time::Instant::now();
+                        idx = 0;
+                        last = std::time::Instant::now();
+
+                        // Enter raw mode
+                        let _ = enable_raw_mode();
+                        // Hide cursor and draw initial spinner line
+                        eprintln!("\x1b[?25l");
+                        render_spinner_line(spinner_frames[idx], &status_text, 0);
+                    }
+                    Ok(Cmd::Write(s)) => {
+                        if active {
+                            eprint!("\r\x1b[2K");
+                            println!("{}", s);
+                            if !hidden {
+                                let elapsed = start_time.elapsed().as_secs();
+                                render_spinner_line(spinner_frames[idx], &status_text, elapsed);
+                            } else {
+                                let _ = io::stdout().flush();
+                            }
+                        } else {
+                            println!("{}", s);
+                        }
+                    }
+                    Ok(Cmd::Hide) => {
+                        if active && !hidden {
+                            eprint!("\r\x1b[2K");
+                            eprint!("\x1b[?25h");
+                            let _ = io::stdout().flush();
+                            let _ = disable_raw_mode();
+                            hidden = true;
+                        }
+                    }
+                    Ok(Cmd::Show) => {
+                        if active && hidden {
+                            let _ = enable_raw_mode();
+                            eprint!("\n\n\x1b[?25l");
+                            let elapsed = start_time.elapsed().as_secs();
+                            render_spinner_line(spinner_frames[idx], &status_text, elapsed);
+                            hidden = false;
+                        }
+                    }
+                    Ok(Cmd::Stop) => {
+                        if active {
+                            eprint!("\r\x1b[2K");
+                            eprint!("\x1b[?25h");
+                            let _ = io::stdout().flush();
+                            let _ = disable_raw_mode();
+                            active = false;
+                            hidden = false;
+                        }
+                    }
+                    Err(mpsc::RecvTimeoutError::Timeout) => {}
+                    Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                }
+
+                if active && !hidden {
+                    // Poll for input (Ctrl+C)
+                    while event::poll(Duration::from_millis(0)).unwrap_or(false) {
+                        match event::read() {
+                            Ok(Event::Key(key)) => {
+                                if key.modifiers.contains(KeyModifiers::CONTROL)
+                                    && matches!(key.code, KeyCode::Char('c') | KeyCode::Char('C'))
+                                {
+                                    eprint!("\r\x1b[2K");
+                                    eprint!("\x1b[?25h");
+                                    // Notify UI
+                                    let _ = ctrl_c_tx.send(());
+                                }
+                            }
+                            Ok(_) => {}
+                            Err(_) => {}
+                        }
+                    }
+
+                    if last.elapsed() >= tick {
+                        idx = (idx + 1) % spinner_frames.len();
+                        let elapsed = start_time.elapsed().as_secs();
+                        render_spinner_line(spinner_frames[idx], &status_text, elapsed);
+                        last = std::time::Instant::now();
+                    }
+                }
+            }
+        });
+
+        self.tx = Some(tx);
+        self.handle = Some(handle);
+        Ok(ctrl_c_rx)
+    }
+
     /// Start the spinner with a message
     pub fn start(&mut self, message: Option<&str>) -> Result<()> {
-        self.stop(None)?;
-        eprintln!();
-        // Enter raw mode
-        enable_raw_mode()?;
-
         let words = [
             "Thinking",
             "Processing",
@@ -66,128 +182,21 @@ impl SpinnerManager {
         };
         let status_text = word.to_string();
         self.message = Some(status_text.clone());
-
-        let (tx, rx) = mpsc::channel::<Cmd>();
-
-        let handle = thread::spawn(move || {
-            // Old visual: frames and pace
-            let spinner_frames: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-            let mut idx: usize = 0;
-            let tick = Duration::from_millis(60);
-            let mut last = std::time::Instant::now();
-            let start_time = std::time::Instant::now();
-
-            // Hide cursor and draw initial spinner line
-            eprint!("\x1b[?25l");
-            let seconds = 0u64;
-            render_spinner_line(spinner_frames[idx], &status_text, seconds);
-
-            let mut keep_running = true;
-            let mut paused = false;
-            let mut ctrl_c = false;
-            while keep_running {
-                // Handle incoming commands quickly
-                match rx.recv_timeout(Duration::from_millis(5)) {
-                    Ok(Cmd::Write(s)) => {
-                        // Print above spinner then redraw spinner line
-                        eprint!("\r\x1b[2K");
-                        println!("{}", s);
-                        // Redraw spinner line with current visuals only if not paused
-                        if !paused {
-                            let elapsed = start_time.elapsed().as_secs();
-                            render_spinner_line(spinner_frames[idx], &status_text, elapsed);
-                        } else {
-                            let _ = io::stdout().flush();
-                        }
-                    }
-                    Ok(Cmd::Pause) => {
-                        // Clear spinner line and show cursor; exit raw mode for clean external
-                        // output
-                        eprint!("\r\x1b[2K");
-                        eprint!("\x1b[?25h");
-                        let _ = io::stdout().flush();
-                        let _ = disable_raw_mode();
-                        paused = true;
-                    }
-                    Ok(Cmd::Resume) => {
-                        // Re-enter raw mode, hide cursor, and redraw spinner line
-                        let _ = enable_raw_mode();
-                        eprint!("\n\n\x1b[?25l");
-                        let elapsed = start_time.elapsed().as_secs();
-                        render_spinner_line(spinner_frames[idx], &status_text, elapsed);
-                        paused = false;
-                    }
-                    Ok(Cmd::Stop) => {
-                        keep_running = false;
-                        continue;
-                    }
-                    Err(mpsc::RecvTimeoutError::Timeout) => {}
-                    Err(mpsc::RecvTimeoutError::Disconnected) => {
-                        keep_running = false;
-                        continue;
-                    }
-                }
-
-                // Drain input; capture Ctrl-C and request shutdown
-                while event::poll(Duration::from_millis(0)).unwrap_or(false) {
-                    match event::read() {
-                        Ok(Event::Key(key)) => {
-                            if key.modifiers.contains(KeyModifiers::CONTROL)
-                                && let KeyCode::Char('c') | KeyCode::Char('C') = key.code
-                            {
-                                ctrl_c = true;
-                            }
-                        }
-                        Ok(_) => {}
-                        Err(_) => break,
-                    }
-                }
-
-                if keep_running && !paused && last.elapsed() >= tick {
-                    idx = (idx + 1) % spinner_frames.len();
-                    let elapsed = start_time.elapsed().as_secs();
-                    // Redraw the full spinner line to avoid artifacts
-                    render_spinner_line(spinner_frames[idx], &status_text, elapsed);
-                    last = std::time::Instant::now();
-                }
-
-                if ctrl_c {
-                    keep_running = false;
-                }
-            }
-
-            // Cleanup: clear line and show cursor
-            eprint!("\r\x1b[2K");
-            eprint!("\x1b[?25h");
-            let _ = io::stdout().flush();
-
-            if ctrl_c {
-                // Cleanup: clear line and show cursor and disable raw mode
-                let _ = disable_raw_mode();
-                // Exit with 130 to emulate SIGINT after cleanup
-                std::process::exit(130);
-            }
-        });
-
-        self.tx = Some(tx);
-        self.handle = Some(handle);
         self.running = true;
-        self.paused = false;
+        self.hidden = false;
+
+        if let Some(tx) = &self.tx {
+            let _ = tx.send(Cmd::Start(status_text));
+        }
+
         Ok(())
     }
 
     /// Stop the active spinner if any
     pub fn stop(&mut self, message: Option<String>) -> Result<()> {
-        // Signal spinner thread to stop and join it
-        if let Some(tx) = self.tx.take() {
+        if let Some(tx) = &self.tx {
             let _ = tx.send(Cmd::Stop);
         }
-        if let Some(handle) = self.handle.take() {
-            let _ = handle.join();
-        }
-
-        // Restore terminal mode
-        let _ = disable_raw_mode();
 
         // Print trailing message if provided
         if let Some(msg) = message {
@@ -196,7 +205,7 @@ impl SpinnerManager {
 
         self.running = false;
         self.message = None;
-        self.paused = false;
+        self.hidden = false;
         Ok(())
     }
 
@@ -213,31 +222,42 @@ impl SpinnerManager {
     }
 
     pub fn ewrite_ln(&mut self, message: impl ToString) -> Result<()> {
-        self.pause()?;
+        self.hide()?;
         eprintln!("{}", message.to_string());
-        self.resume()?;
+        self.show()?;
         Ok(())
     }
 
-    /// Pause the spinner without resetting the timer.
-    pub fn pause(&mut self) -> Result<()> {
-        if self.running && !self.paused {
+    /// Hide the spinner without resetting the timer.
+    pub fn hide(&mut self) -> Result<()> {
+        if self.running && !self.hidden {
             if let Some(tx) = &self.tx {
-                let _ = tx.send(Cmd::Pause);
+                let _ = tx.send(Cmd::Hide);
             }
-            self.paused = true;
+            self.hidden = true;
         }
         Ok(())
     }
 
-    /// Resume a previously paused spinner, keeping the elapsed time.
-    pub fn resume(&mut self) -> Result<()> {
-        if self.running && self.paused {
+    /// Show a previously hidden spinner, keeping the elapsed time.
+    pub fn show(&mut self) -> Result<()> {
+        if self.running && self.hidden {
             if let Some(tx) = &self.tx {
-                let _ = tx.send(Cmd::Resume);
+                let _ = tx.send(Cmd::Show);
             }
-            self.paused = false;
+            self.hidden = false;
         }
         Ok(())
+    }
+}
+
+impl Drop for SpinnerManager {
+    fn drop(&mut self) {
+        if let Some(tx) = &self.tx {
+            let _ = tx.send(Cmd::Stop);
+        }
+        if let Some(handle) = self.handle.take() {
+            let _ = handle.join();
+        }
     }
 }

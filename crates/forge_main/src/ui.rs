@@ -54,6 +54,7 @@ pub struct UI<A, F: Fn() -> A> {
     command: Arc<ForgeCommandManager>,
     cli: Cli,
     spinner: SpinnerManager,
+    ctrl_c_rx: tokio::sync::broadcast::Receiver<()>,
     #[allow(dead_code)] // The guard is kept alive by being held in the struct
     _guard: forge_tracker::Guard,
 }
@@ -169,6 +170,8 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
         let api = Arc::new(f());
         let env = api.environment();
         let command = Arc::new(ForgeCommandManager::default());
+        let mut spinner = SpinnerManager::new();
+        let ctrl_c_rx = spinner.init()?;
         Ok(Self {
             state: Default::default(),
             api,
@@ -176,7 +179,8 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             console: Console::new(env.clone(), command.clone()),
             cli,
             command,
-            spinner: SpinnerManager::new(),
+            spinner,
+            ctrl_c_rx,
             markdown: MarkdownWriter::new(),
             _guard: forge_tracker::init_tracing(env.log_path(), TRACKER.clone())?,
         })
@@ -242,6 +246,9 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             return Ok(());
         }
 
+        // Create a local receiver for Ctrl+C events to avoid borrowing self in the loop
+        let mut ctrl_c_rx = self.ctrl_c_rx.resubscribe();
+
         // Get initial input from prompt
         let mut command = self.prompt().await;
 
@@ -251,6 +258,9 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                     tokio::select! {
                         _ = tokio::signal::ctrl_c() => {
                             tracing::info!("User interrupted operation with Ctrl+C");
+                        }
+                        _ = ctrl_c_rx.recv() => {
+                            tracing::info!("User interrupted operation with Ctrl+C (spinner)");
                         }
                         result = self.on_command(command) => {
                             match result {
@@ -2160,8 +2170,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
             },
             ChatResponse::ToolCallStart(_) => {
                 // Hide spinner while tool call
-                self.markdown.reset();
-                let _ = self.spinner.pause();
+                let _ = self.spinner.hide();
             }
             ChatResponse::ToolCallEnd(toolcall_result) => {
                 // Only track toolcall name in case of success else track the error.
@@ -2177,7 +2186,7 @@ impl<A: API + 'static, F: Fn() -> A> UI<A, F> {
                 tracker::tool_call(payload);
 
                 // Resume the spinner as tool call is over
-                let _ = self.spinner.resume();
+                let _ = self.spinner.show();
 
                 if !self.cli.verbose {
                     return Ok(());
