@@ -32,9 +32,9 @@ enum Cmd {
 /// Manages spinner functionality for the UI
 #[derive(Default)]
 pub struct SpinnerManager {
-    tx: Option<mpsc::Sender<Cmd>>, // channel to spinner thread
+    tx: Option<mpsc::Sender<Cmd>>,  // channel to spinner thread
     handle: Option<JoinHandle<()>>, // spinner thread handle
-    message: Option<String>,       // current status text
+    message: Option<String>,        // current status text
     running: bool,
     hidden: bool,
 }
@@ -50,8 +50,7 @@ impl SpinnerManager {
         let (ctrl_c_tx, ctrl_c_rx) = broadcast::channel(1);
 
         let handle = thread::spawn(move || {
-            let spinner_frames: [&str; 10] =
-                ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+            let spinner_frames: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
             let mut idx: usize = 0;
             let tick = Duration::from_millis(60);
             let mut last = std::time::Instant::now();
