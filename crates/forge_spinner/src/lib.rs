@@ -4,18 +4,24 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 use anyhow::Result;
+use crossterm::cursor::{Hide, MoveToColumn, Show};
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
+use crossterm::style::Stylize;
+use crossterm::terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType};
+use crossterm::{execute};
 use rand::seq::IndexedRandom;
 use tokio::sync::broadcast;
 
 /// Render the spinner line consistently with styling and flush.
 fn render_spinner_line(frame: &str, status: &str, seconds: u64) {
     // Clear current line, then render spinner + message + timer + hint
-    eprint!("\r\x1b[2K");
+    let _ = execute!(io::stderr(), MoveToColumn(0), Clear(ClearType::CurrentLine));
     eprint!(
-        "\r\x1b[32m{}\x1b[0m  \x1b[1;32m{}\x1b[0m {}s · \x1b[2;37mCtrl+C to interrupt\x1b[0m",
-        frame, status, seconds
+        "\r{}  {} {}s · {}",
+        frame.green(),
+        status.bold().green(),
+        seconds,
+        "Ctrl+C to interrupt".dark_grey()
     );
     let _ = io::stdout().flush();
 }
@@ -78,12 +84,12 @@ impl SpinnerManager {
                         // Enter raw mode
                         let _ = enable_raw_mode();
                         // Hide cursor and draw initial spinner line
-                        eprintln!("\x1b[?25l");
+                        let _ = execute!(io::stderr(), Hide);
                         render_spinner_line(spinner_frames[idx], &status_text, 0);
                     }
                     Ok(Cmd::Write(s)) => {
                         if active {
-                            eprint!("\r\x1b[2K");
+                            let _ = execute!(io::stderr(), MoveToColumn(0), Clear(ClearType::CurrentLine));
                             println!("{}", s);
                             if !hidden {
                                 let elapsed = start_time.elapsed().as_secs();
@@ -97,9 +103,7 @@ impl SpinnerManager {
                     }
                     Ok(Cmd::Hide) => {
                         if active && !hidden {
-                            eprint!("\r\x1b[2K");
-                            eprint!("\x1b[?25h");
-                            let _ = io::stdout().flush();
+                            let _ = execute!(io::stderr(), MoveToColumn(0), Clear(ClearType::CurrentLine), Show);
                             let _ = disable_raw_mode();
                             hidden = true;
                         }
@@ -107,7 +111,8 @@ impl SpinnerManager {
                     Ok(Cmd::Show) => {
                         if active && hidden {
                             let _ = enable_raw_mode();
-                            eprint!("\n\n\x1b[?25l");
+                            eprint!("\n\n");
+                            let _ = execute!(io::stderr(), Hide);
                             let elapsed = start_time.elapsed().as_secs();
                             render_spinner_line(spinner_frames[idx], &status_text, elapsed);
                             hidden = false;
@@ -115,9 +120,7 @@ impl SpinnerManager {
                     }
                     Ok(Cmd::Stop) => {
                         if active {
-                            eprint!("\r\x1b[2K");
-                            eprint!("\x1b[?25h");
-                            let _ = io::stdout().flush();
+                            let _ = execute!(io::stderr(), MoveToColumn(0), Clear(ClearType::CurrentLine), Show);
                             let _ = disable_raw_mode();
                             active = false;
                             hidden = false;
@@ -135,8 +138,7 @@ impl SpinnerManager {
                                 if key.modifiers.contains(KeyModifiers::CONTROL)
                                     && matches!(key.code, KeyCode::Char('c') | KeyCode::Char('C'))
                                 {
-                                    eprint!("\r\x1b[2K");
-                                    eprint!("\x1b[?25h");
+                                    let _ = execute!(io::stderr(), MoveToColumn(0), Clear(ClearType::CurrentLine), Show);
                                     // Notify UI
                                     let _ = ctrl_c_tx.send(());
                                 }
@@ -210,7 +212,8 @@ impl SpinnerManager {
 
     pub fn write_ln(&mut self, message: impl ToString) -> Result<()> {
         let s = message.to_string();
-        let normalized = s.replace('\n', "\n\x1b[0G");
+        // No need to normalize with ANSI codes anymore, just use the string as-is
+        let normalized = s;
 
         if let Some(tx) = &self.tx {
             let _ = tx.send(Cmd::Write(normalized));
