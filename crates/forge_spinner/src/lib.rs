@@ -26,7 +26,7 @@ enum Cmd {
     Write(String),
     Hide,
     Show,
-    Stop,
+    Stop(mpsc::Sender<()>),
 }
 
 mod progress_bar;
@@ -116,7 +116,7 @@ impl SpinnerManager {
                             hidden = false;
                         }
                     }
-                    Ok(Cmd::Stop) => {
+                    Ok(Cmd::Stop(tx)) => {
                         if active {
                             eprint!("\r\x1b[2K");
                             eprint!("\x1b[?25h");
@@ -125,6 +125,8 @@ impl SpinnerManager {
                             active = false;
                             hidden = false;
                         }
+                        // Signal that we have stopped
+                        let _ = tx.send(());
                     }
                     Err(mpsc::RecvTimeoutError::Timeout) => {}
                     Err(mpsc::RecvTimeoutError::Disconnected) => break,
@@ -197,7 +199,10 @@ impl SpinnerManager {
     /// Stop the active spinner if any
     pub fn stop(&mut self, message: Option<String>) -> Result<()> {
         if let Some(tx) = &self.tx {
-            let _ = tx.send(Cmd::Stop);
+            let (ack_tx, ack_rx) = mpsc::channel();
+            let _ = tx.send(Cmd::Stop(ack_tx));
+            // Wait for the spinner to actually stop and release the terminal
+            let _ = ack_rx.recv();
         }
 
         // Print trailing message if provided
@@ -256,7 +261,9 @@ impl SpinnerManager {
 impl Drop for SpinnerManager {
     fn drop(&mut self) {
         if let Some(tx) = &self.tx {
-            let _ = tx.send(Cmd::Stop);
+            let (ack_tx, ack_rx) = mpsc::channel();
+            let _ = tx.send(Cmd::Stop(ack_tx));
+            let _ = ack_rx.recv();
         }
         if let Some(handle) = self.handle.take() {
             let _ = handle.join();
