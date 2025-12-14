@@ -15,7 +15,7 @@ use forge_api::{
 };
 use forge_app::utils::{format_display_path, truncate_key};
 use forge_app::{CommitResult, ToolResolver};
-use forge_display::MarkdownFormat;
+use forge_display::MarkdownWriter;
 use forge_domain::{
     AuthMethod, ChatResponseContent, ContextMessage, Role, TitleFormat, UserCommand,
 };
@@ -91,7 +91,7 @@ fn format_mcp_headers(server: &forge_domain::McpServerConfig) -> Option<String> 
 }
 
 pub struct UI<A, F: Fn() -> A> {
-    markdown: MarkdownFormat,
+    markdown: MarkdownWriter,
     state: UIState,
     api: Arc<F::Output>,
     new_api: Arc<F>,
@@ -99,6 +99,7 @@ pub struct UI<A, F: Fn() -> A> {
     command: Arc<ForgeCommandManager>,
     cli: Cli,
     spinner: SpinnerManager,
+    ctrl_c_rx: tokio::sync::broadcast::Receiver<()>,
     #[allow(dead_code)] // The guard is kept alive by being held in the struct
     _guard: forge_tracker::Guard,
 }
@@ -214,6 +215,8 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         let api = Arc::new(f());
         let env = api.environment();
         let command = Arc::new(ForgeCommandManager::default());
+        let mut spinner = SpinnerManager::new();
+        let ctrl_c_rx = spinner.init()?;
         Ok(Self {
             state: Default::default(),
             api,
@@ -221,8 +224,9 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             console: Console::new(env.clone(), command.clone()),
             cli,
             command,
-            spinner: SpinnerManager::new(),
-            markdown: MarkdownFormat::new(),
+            spinner,
+            ctrl_c_rx,
+            markdown: MarkdownWriter::new(),
             _guard: forge_tracker::init_tracing(env.log_path(), TRACKER.clone())?,
         })
     }
@@ -303,6 +307,9 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             return Ok(());
         }
 
+        // Create a local receiver for Ctrl+C events to avoid borrowing self in the loop
+        let mut ctrl_c_rx = self.ctrl_c_rx.resubscribe();
+
         // Get initial input from prompt
         let mut command = self.prompt().await;
 
@@ -312,6 +319,9 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                     tokio::select! {
                         _ = tokio::signal::ctrl_c() => {
                             tracing::info!("User interrupted operation with Ctrl+C");
+                        }
+                        _ = ctrl_c_rx.recv() => {
+                            tracing::info!("User interrupted operation with Ctrl+C (spinner)");
                         }
                         result = self.on_command(command) => {
                             match result {
@@ -2402,6 +2412,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             }
         }
 
+        self.markdown.reset();
         self.spinner.stop(None)?;
 
         Ok(())
@@ -2464,12 +2475,12 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 ChatResponseContent::Title(title) => self.writeln(title.display())?,
                 ChatResponseContent::PlainText(text) => self.writeln(text)?,
                 ChatResponseContent::Markdown(text) => {
-                    tracing::info!(message = %text, "Agent Response");
-                    self.writeln(self.markdown.render(&text))?;
+                    self.markdown.add_chunk(&text, &mut self.spinner);
                 }
             },
             ChatResponse::ToolCallStart(_) => {
-                self.spinner.stop(None)?;
+                // Hide spinner while tool call
+                let _ = self.spinner.hide();
             }
             ChatResponse::ToolCallEnd(toolcall_result) => {
                 // Only track toolcall name in case of success else track the error.
@@ -2484,7 +2495,9 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                 };
                 tracker::tool_call(payload);
 
-                self.spinner.start(None)?;
+                // Resume the spinner as tool call is over
+                let _ = self.spinner.show();
+
                 if !self.cli.verbose {
                     return Ok(());
                 }
@@ -2512,8 +2525,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
             }
             ChatResponse::TaskReasoning { content } => {
                 if !content.trim().is_empty() {
-                    let rendered_content = self.markdown.render(&content);
-                    self.writeln(rendered_content.dimmed())?;
+                    self.markdown.add_chunk_dimmed(&content, &mut self.spinner);
                 }
             }
             ChatResponse::TaskComplete => {
@@ -2549,8 +2561,9 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
         self.spinner.start(Some("Loading Summary"))?;
 
         let info = Info::default().extend(&conversation);
-        self.writeln(info)?;
+
         self.spinner.stop(None)?;
+        self.writeln(info)?;
 
         // Only prompt for new conversation if in interactive mode and prompt is enabled
         if self.cli.is_interactive() {
@@ -2848,7 +2861,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
 
         // Format and display the message using the message_display module
         if let Some(message) = message {
-            self.writeln(self.markdown.render(message))?;
+            self.markdown.add_chunk(message, &mut self.spinner);
         }
 
         Ok(())

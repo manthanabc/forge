@@ -131,7 +131,7 @@ impl<A: Services> DataGenerationApp<A> {
                     context.add_message(ContextMessage::user(content, Some(model_id.clone())));
 
                 let stream = services.chat(&model_id, context, provider.clone()).await?;
-                let response = stream.into_full(false).await?;
+                let response = stream.into_full(false, None).await?;
 
                 anyhow::Ok((input, response))
             }
