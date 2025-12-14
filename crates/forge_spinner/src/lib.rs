@@ -1,7 +1,7 @@
 use std::io::{self, Write};
 use std::sync::mpsc;
 use std::thread::{self, JoinHandle};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
@@ -35,11 +35,6 @@ pub use progress_bar::*;
 /// Manages spinner functionality for the UI
 #[derive(Default)]
 pub struct SpinnerManager {
-    start_time: Option<Instant>,
-    tracker: Option<JoinHandle<()>>,
-    #[cfg(test)]
-    tick_counter: Option<std::sync::Arc<std::sync::atomic::AtomicU64>>,
-
     tx: Option<mpsc::Sender<Cmd>>,  // channel to spinner thread
     handle: Option<JoinHandle<()>>, // spinner thread handle
     message: Option<String>,        // current status text
@@ -50,13 +45,6 @@ pub struct SpinnerManager {
 impl SpinnerManager {
     pub fn new() -> Self {
         Self::default()
-    }
-
-    #[cfg(test)]
-    pub fn test_with_tick_counter(
-        tick_counter: std::sync::Arc<std::sync::atomic::AtomicU64>,
-    ) -> Self {
-        Self { tick_counter: Some(tick_counter), ..Self::default() }
     }
 
     /// Initialize the spinner thread and return a receiver for Ctrl+C events
@@ -275,31 +263,4 @@ impl Drop for SpinnerManager {
         }
     }
 }
-#[cfg(test)]
-mod tests {
-    use std::sync::Arc;
-    use std::sync::atomic::{AtomicU64, Ordering};
 
-    use pretty_assertions::assert_eq;
-
-    use super::SpinnerManager;
-
-    #[tokio::test]
-    async fn test_spinner_tracker_task_is_stopped_on_stop() {
-        let fixture_counter = Arc::new(AtomicU64::new(0));
-        let mut fixture_spinner = SpinnerManager::test_with_tick_counter(fixture_counter.clone());
-
-        fixture_spinner.start(Some("Test")).unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
-
-        let actual_before_stop = fixture_counter.load(Ordering::SeqCst);
-        assert!(actual_before_stop > 0);
-
-        fixture_spinner.stop(None).unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
-
-        let actual_after_stop = fixture_counter.load(Ordering::SeqCst);
-        let expected = actual_before_stop;
-        assert_eq!(actual_after_stop, expected);
-    }
-}
