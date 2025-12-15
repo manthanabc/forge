@@ -325,7 +325,9 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                         }
                         result = self.on_command(command) => {
                             match result {
-                                Ok(exit) => if exit {return Ok(())},
+                                Ok(exit) => {
+                                        if exit {return Ok(())}
+                                },
                                 Err(error) => {
                                     if let Some(conversation_id) = self.state.conversation_id.as_ref()
                                         && let Some(conversation) = self.api.conversation(conversation_id).await.ok().flatten() {
@@ -339,8 +341,6 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                             }
                         }
                     }
-
-                    self.spinner.stop(None)?;
                 }
                 Err(error) => {
                     tracker::error(&error);
@@ -351,6 +351,7 @@ impl<A: API + 'static, F: Fn() -> A + Send + Sync> UI<A, F> {
                     )?;
                 }
             }
+            self.spinner.stop(None)?;
             // Centralized prompt call at the end of the loop
             command = self.prompt().await;
         }

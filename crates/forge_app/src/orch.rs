@@ -261,7 +261,6 @@ impl<S: AgentService> Orchestrator<S> {
                 context = c_context;
             } else {
                 debug!(agent_id = %agent.id, "No compaction was needed");
-
             }
 
             info!(
@@ -289,18 +288,19 @@ impl<S: AgentService> Orchestrator<S> {
                     .iter()
                     .any(|call| ToolCatalog::should_yield(&call.name));
 
-//            if let Some(reasoning) = message.reasoning.as_ref()
-//                && context.is_reasoning_supported()
-//            {
-//                // If reasoning is present, send it as a separate message
-//                self.send(ChatResponse::TaskReasoning { content: reasoning.to_string() })
-//                    .await?;
-//            }
+            //            if let Some(reasoning) = message.reasoning.as_ref()
+            //                && context.is_reasoning_supported()
+            //            {
+            //                // If reasoning is present, send it as a separate message
+            //                self.send(ChatResponse::TaskReasoning { content:
+            // reasoning.to_string() })                    .await?;
+            //            }
             // Send the content message
-//            self.send(ChatResponse::TaskMessage {
-//                content: ChatResponseContent::Markdown(message.content.clone()),
-//            })
-//            .await?;
+            //            self.send(ChatResponse::TaskMessage {
+            //                content:
+            // ChatResponseContent::Markdown(message.content.clone()),
+            //            })
+            //            .await?;
             // Process tool calls and update context
             let mut tool_call_records = self
                 .execute_tool_calls(&message.tool_calls, &tool_context)

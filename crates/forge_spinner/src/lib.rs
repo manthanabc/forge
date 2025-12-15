@@ -1,6 +1,5 @@
 use std::io::{self, Write};
 use std::sync::mpsc;
-use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 use anyhow::Result;
@@ -8,6 +7,7 @@ use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 use rand::seq::IndexedRandom;
 use tokio::sync::broadcast;
+use tokio::task::JoinHandle;
 
 /// Render the spinner line consistently with styling and flush.
 fn render_spinner_line(frame: &str, status: &str, seconds: u64) {
@@ -52,7 +52,7 @@ impl SpinnerManager {
         let (tx, rx) = mpsc::channel::<Cmd>();
         let (ctrl_c_tx, ctrl_c_rx) = broadcast::channel(1);
 
-        let handle = thread::spawn(move || {
+        let handle = tokio::spawn(async move {
             let spinner_frames: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
             let mut idx: usize = 0;
             let tick = Duration::from_millis(60);
@@ -265,9 +265,5 @@ impl Drop for SpinnerManager {
             let _ = tx.send(Cmd::Stop(ack_tx));
             let _ = ack_rx.recv();
         }
-        if let Some(handle) = self.handle.take() {
-            let _ = handle.join();
-        }
     }
 }
-
